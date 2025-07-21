@@ -24,3 +24,29 @@ Thumbs.db
 htmlcov/
 .coverage
 .cache/
+
+# Data directories (keep local, don't commit)
+data/
+logs/
+grok4_responses/
+
+# Generated content files
+*_response_*.md
+*_followup_*.md
+*_analysis_*.txt
+*.csv
+*_fmv_*.md
+
+# Environment files
+.env
+mcp.json
+
+# Database files
+*.db
+*.sqlite
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
