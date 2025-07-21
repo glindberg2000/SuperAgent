@@ -50,3 +50,11 @@ mcp.json
 *.temp
 .DS_Store
 
+
+# Documentation and data directories
+PRD/
+docs/
+data/
+logs/
+*.db
+*.log

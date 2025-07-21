@@ -25,7 +25,7 @@ load_dotenv()
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('logs/discord_agent.log'),
@@ -281,17 +281,104 @@ class EnhancedDiscordAgent:
             thread_id = message_data.get('thread_id')
             channel_id = message_data['channel_id']
             
+            # Check for file attachments and handle them
+            attachments = message_data.get('attachments', [])
+            attachment_info = ""
+            
+            # When processing files, reduce context to avoid pattern repetition
+            context_limit = 3 if attachments else self.config.max_context_messages
+            
             context_messages = self.memory.get_context_messages(
                 channel_id, 
                 thread_id, 
-                limit=self.config.max_context_messages
+                limit=context_limit
             )
+            
+            if attachments:
+                logger.info(f"Message has {len(attachments)} attachment(s)")
+                logger.debug(f"Attachment data: {attachments}")
+                attachment_info = f"\n\nATTACHMENT INFO: The user has uploaded {len(attachments)} file(s):\n"
+                for att in attachments:
+                    if isinstance(att, dict) and 'filename' in att:
+                        attachment_info += f"- {att['filename']} ({att['size']} bytes, {att.get('content_type', 'unknown')} type)\n"
+                    else:
+                        logger.warning(f"Invalid attachment format: {att}")
+                        attachment_info += f"- Invalid attachment format: {att}\n"
+                
+                # Try to download and process the first attachment
+                content_lower = message_data['content'].lower()
+                logger.info(f"Checking for download keywords in: '{content_lower}'")
+                if attachments and ("download" in content_lower or "read" in content_lower or "file" in content_lower):
+                    if len(attachments) > 0 and isinstance(attachments[0], dict) and 'filename' in attachments[0]:
+                        try:
+                            logger.info(f"Attempting to download attachment: {attachments[0]['filename']}")
+                            download_params = {
+                                "channel_id": channel_id,
+                                "message_id": message_data['id'],
+                                "attachment_filename": attachments[0]['filename']
+                            }
+                            logger.debug(f"Download params: {download_params}")
+                            
+                            download_result = await session.call_tool("download_attachment", download_params)
+                            
+                            if download_result and download_result.content:
+                                download_response = download_result.content[0].text
+                                logger.info(f"Download response: {download_response}")
+                                if "downloaded successfully" in download_response:
+                                    # Parse the absolute path from the response
+                                    import re
+                                    path_match = re.search(r'Absolute path: (.+?)\n', download_response)
+                                    if path_match:
+                                        file_path = path_match.group(1)
+                                    else:
+                                        # Fallback to parsing the regular save path
+                                        save_match = re.search(r'Saved to: (.+?)\n', download_response)
+                                        if save_match:
+                                            file_path = save_match.group(1)
+                                        else:
+                                            file_path = f"downloads/{attachments[0]['filename']}"
+                                    
+                                    logger.info(f"Attempting to read file from: {file_path}")
+                                    
+                                    # Try to read the downloaded file
+                                    try:
+                                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                            file_content = f.read()[:2000]  # First 2000 chars
+                                        attachment_info += f"\nFILE CONTENT (first 2000 chars):\n{file_content}\n"
+                                        logger.info(f"Successfully read attachment: {attachments[0]['filename']}")
+                                    except Exception as e:
+                                        logger.error(f"Could not read file content: {e}")
+                                        attachment_info += f"\nCould not read file content: {e}\n"
+                                else:
+                                    attachment_info += f"\nFailed to download attachment: {download_response}\n"
+                            else:
+                                logger.warning("No download result received")
+                                attachment_info += f"\nNo download result received\n"
+                        except Exception as e:
+                            logger.error(f"Error downloading attachment: {e}")
+                            attachment_info += f"\nError downloading attachment: {e}\n"
+                    else:
+                        logger.warning("First attachment is not valid or missing filename")
+                        attachment_info += f"\nFirst attachment is not valid or missing filename\n"
             
             # Generate LLM response
             start_time = time.time()
-            system_prompt = f"""You are {self.config.name}, a helpful Discord bot powered by {self.config.llm_type}.
+            
+            # Create a more explicit prompt when we have file content
+            if attachment_info and "FILE CONTENT" in attachment_info:
+                system_prompt = f"""You are {self.config.name}, a helpful Discord bot powered by {self.config.llm_type}.
+
+IMPORTANT: The user has uploaded a file and you have SUCCESSFULLY downloaded and read it. The file content is provided below. You MUST analyze and respond about this specific file content.
+
+DO NOT say you cannot read files - you have already successfully read the file.{attachment_info}
+
+Based on the file content above, provide a helpful analysis of what the file contains. Be specific about what you found in the file."""
+            else:
+                system_prompt = f"""You are {self.config.name}, a helpful Discord bot powered by {self.config.llm_type}.
 You're participating in a Discord conversation. Be conversational, helpful, and engaging.
-Keep responses concise but informative. Avoid being repetitive or robotic."""
+Keep responses concise but informative. Avoid being repetitive or robotic.
+
+CAPABILITIES: You have access to file operations - you can download files uploaded by users and analyze their content. When users upload files and ask you to read them, you can download and process the files.{attachment_info}"""
             
             response_content = await self.llm_provider.generate_response(
                 context_messages, 
@@ -480,7 +567,8 @@ Keep responses concise but informative. Avoid being repetitive or robotic."""
                     'channel_id': json_data.get('channel_id', 'unknown'),
                     'timestamp': datetime.now(),
                     'thread_id': json_data.get('thread_id'),
-                    'is_bot': 'bot' in json_data.get('author', '').lower()
+                    'is_bot': 'bot' in json_data.get('author', '').lower(),
+                    'attachments': json_data.get('attachments', [])
                 }
                 if message_data['content']:
                     logger.debug(f"Successfully parsed message data: {message_data}")
