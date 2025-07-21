@@ -1,0 +1,26 @@
+.venv/
+.env
+*.env
+memory.json
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+*.sqlite3
+.ipynb_checkpoints/
+.secrets/
+.idea/
+.vscode/
+*.bak
+*.swp
+*.swo
+*.egg-info/
+dist/
+build/
+# OS generated files
+Thumbs.db
+.DS_Store
+# Test output
+htmlcov/
+.coverage
+.cache/
