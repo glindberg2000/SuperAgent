@@ -1,0 +1,47 @@
+{
+  "agents": {
+    "grok4_agent": {
+      "name": "Grok4Agent",
+      "llm_type": "grok4",
+      "max_context_messages": 15,
+      "max_turns_per_thread": 30,
+      "response_delay": 2.0,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "helpful, analytical, and engaging",
+      "system_prompt_additions": "You excel at research, analysis, and providing detailed explanations."
+    },
+    "claude_agent": {
+      "name": "ClaudeAgent", 
+      "llm_type": "claude",
+      "max_context_messages": 20,
+      "max_turns_per_thread": 25,
+      "response_delay": 1.5,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "thoughtful, precise, and helpful",
+      "system_prompt_additions": "You excel at code analysis, writing, and complex reasoning tasks."
+    },
+    "gemini_agent": {
+      "name": "GeminiAgent",
+      "llm_type": "gemini", 
+      "max_context_messages": 18,
+      "max_turns_per_thread": 20,
+      "response_delay": 1.0,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "creative, versatile, and collaborative",
+      "system_prompt_additions": "You excel at creative tasks, multimodal analysis, and collaborative problem-solving."
+    }
+  },
+  "global_settings": {
+    "db_path": "data/agent_memory.db",
+    "log_directory": "logs",
+    "audit_retention_days": 30,
+    "max_response_length": 2000,
+    "enable_thread_awareness": true
+  }
+}
