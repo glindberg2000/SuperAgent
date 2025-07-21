@@ -1,0 +1,1 @@
+{"type":"entity","entityType":"project","name":"SuperAgent","observations":["A generic multi-project AI agent framework with Discord, Grok4, and MCP integration.","Uses knowledge graph memory MCP as persistent memory backend.","Supports project-aware tagging for all memory operations."]}
