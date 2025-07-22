@@ -43,18 +43,31 @@ class MultiAgentLauncher:
         api_keys = {
             'grok4': os.getenv('XAI_API_KEY'),
             'claude': os.getenv('ANTHROPIC_API_KEY'),
-            'gemini': os.getenv('GOOGLE_AI_API_KEY')
+            'gemini': os.getenv('GOOGLE_AI_API_KEY'),
+            'openai': os.getenv('OPENAI_API_KEY')
+        }
+        
+        # Get bot tokens (try agent-specific first, then fall back to shared)
+        bot_tokens = {
+            'grok4': os.getenv('DISCORD_TOKEN_GROK'),
+            'claude': os.getenv('DISCORD_TOKEN_CLAUDE') or os.getenv('DISCORD_TOKEN_GROK'),
+            'gemini': os.getenv('DISCORD_TOKEN_GEMINI') or os.getenv('DISCORD_TOKEN_GROK'),
+            'openai': os.getenv('DISCORD_TOKEN_O3') or os.getenv('DISCORD_TOKEN_GROK')
         }
         
         llm_type = agent_data['llm_type']
         api_key = api_keys.get(llm_type)
+        bot_token = bot_tokens.get(llm_type)
         
         if not api_key:
             raise ValueError(f"Missing API key for {llm_type}. Set environment variable.")
         
-        return AgentConfig(
+        if not bot_token:
+            raise ValueError(f"Missing Discord bot token for {llm_type}. Set DISCORD_TOKEN_GROK or agent-specific token.")
+        
+        config = AgentConfig(
             name=agent_data['name'],
-            bot_token=os.getenv('DISCORD_TOKEN_GROK'),  # For now using same token
+            bot_token=bot_token,
             server_id=os.getenv('DEFAULT_SERVER_ID', '1395578178973597799'),
             api_key=api_key,
             llm_type=llm_type,
@@ -65,6 +78,12 @@ class MultiAgentLauncher:
             ignore_bots=agent_data.get('ignore_bots', True),
             bot_allowlist=agent_data.get('bot_allowlist', [])
         )
+        
+        # Add model parameter for OpenAI
+        if 'model' in agent_data:
+            config.model = agent_data['model']
+        
+        return config
     
     async def launch_agent(self, agent_name: str, config: AgentConfig):
         """Launch a single agent"""

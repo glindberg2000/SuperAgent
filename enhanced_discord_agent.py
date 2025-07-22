@@ -229,7 +229,10 @@ class EnhancedDiscordAgent:
     
     def _create_llm_provider(self) -> LLMProvider:
         """Create appropriate LLM provider based on config"""
-        return create_llm_provider(self.config.llm_type, self.config.api_key)
+        kwargs = {}
+        if hasattr(self.config, 'model'):
+            kwargs['model'] = self.config.model
+        return create_llm_provider(self.config.llm_type, self.config.api_key, **kwargs)
     
     def _should_respond(self, message_data: Dict[str, Any]) -> tuple[bool, str]:
         """Determine if agent should respond to message"""

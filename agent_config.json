@@ -35,6 +35,19 @@
       "allowed_channels": [],
       "personality": "creative, versatile, and collaborative",
       "system_prompt_additions": "You excel at creative tasks, multimodal analysis, and collaborative problem-solving."
+    },
+    "o3_agent": {
+      "name": "O3Agent",
+      "llm_type": "openai",
+      "model": "o3-mini",
+      "max_context_messages": 25,
+      "max_turns_per_thread": 40,
+      "response_delay": 1.2,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "logical, systematic, and precise",
+      "system_prompt_additions": "You excel at step-by-step reasoning, mathematical analysis, and logical problem-solving. Use clear, structured thinking."
     }
   },
   "global_settings": {

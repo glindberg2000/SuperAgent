@@ -220,6 +220,58 @@ class GeminiProvider(LLMProvider):
             logger.error(f"Gemini API exception: {e}")
             return f"Sorry, I'm having trouble connecting to Gemini right now. Error: {str(e)}"
 
+class OpenAIProvider(LLMProvider):
+    """OpenAI LLM provider for O3 and other OpenAI models"""
+    
+    def __init__(self, api_key: str, model: str = "o3-mini"):
+        super().__init__(api_key, "openai")
+        self.client = OpenAI(api_key=api_key)
+        self.model = model
+    
+    async def generate_response(self, messages: List[Dict], system_prompt: str = "") -> str:
+        """Generate response using OpenAI models"""
+        
+        try:
+            # Convert our message format to OpenAI format
+            api_messages = []
+            
+            if system_prompt:
+                api_messages.append({
+                    "role": "system",
+                    "content": system_prompt
+                })
+            
+            # Convert conversation history to chat format
+            for msg in messages:
+                if msg.get('is_bot') and msg.get('agent_name'):
+                    role = "assistant"
+                else:
+                    role = "user"
+                
+                api_messages.append({
+                    "role": role,
+                    "content": f"{msg['author']}: {msg['content']}"
+                })
+            
+            # Use sync function in thread to avoid blocking
+            def sync_call():
+                return self.client.chat.completions.create(
+                    model=self.model,
+                    messages=api_messages,
+                    temperature=0.7,
+                    max_tokens=1000
+                )
+            
+            # Run sync function in thread
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, sync_call)
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"OpenAI API exception: {e}")
+            return f"Sorry, I'm having trouble connecting to OpenAI right now. Error: {str(e)}"
+
 def create_llm_provider(llm_type: str, api_key: str, **kwargs) -> LLMProvider:
     """Factory function to create appropriate LLM provider"""
     
@@ -230,5 +282,8 @@ def create_llm_provider(llm_type: str, api_key: str, **kwargs) -> LLMProvider:
         return ClaudeProvider(api_key)
     elif llm_type.lower() == 'gemini':
         return GeminiProvider(api_key)
+    elif llm_type.lower() == 'openai':
+        model = kwargs.get('model', 'o3-mini')
+        return OpenAIProvider(api_key, model=model)
     else:
         raise ValueError(f"Unsupported LLM type: {llm_type}")
