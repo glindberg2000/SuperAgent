@@ -11,6 +11,12 @@ SuperAgent is a production-ready multi-agent system that provides intelligent Di
 - **🗄️ PostgreSQL + pgvector**: Shared vector memory across all agents
 - **🔗 Docker Network**: Isolated container communication
 
+## 🚨 **CRITICAL DEPENDENCY WARNING**
+
+SuperAgent requires the `mcp-discord` submodule for Discord communication. **WITHOUT IT, THE SYSTEM WILL NOT FUNCTION.**
+
+📖 **See [SUBMODULE_MANAGEMENT.md](docs/SUBMODULE_MANAGEMENT.md) for complete submodule documentation**
+
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
@@ -18,6 +24,7 @@ SuperAgent is a production-ready multi-agent system that provides intelligent Di
 - **Node.js** (for Claude Code CLI)
 - **Python 3.11+**
 - **Claude Max Plan** (for authenticated containers)
+- **Git Submodules** (mcp-discord submodule is ESSENTIAL)
 
 ### 2. Environment Setup
 ```bash
@@ -246,6 +253,7 @@ cd mcp-discord && docker-compose restart discord-http-api
 
 ## 📚 Documentation
 
+- **[SUBMODULE_MANAGEMENT.md](docs/SUBMODULE_MANAGEMENT.md)** - **CRITICAL: mcp-discord submodule setup**
 - **[HYBRID_ARCHITECTURE.md](docs/HYBRID_ARCHITECTURE.md)** - Complete architecture guide
 - **[DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Customization and development
 - **[CLAUDE.md](CLAUDE.md)** - Project overview and status
