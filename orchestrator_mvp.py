@@ -21,26 +21,44 @@ class MVPOrchestrator:
     """Minimal orchestrator for spawning Claude Code containers"""
     
     def __init__(self):
+        import os
+        
+        # Try different Docker connection methods
+        docker_client = None
+        connection_error = None
+        
         try:
-            # Try to connect to Docker using environment settings
-            self.docker = docker.from_env()
-            # Test the connection
-            self.docker.ping()
-            logger.info("✅ Connected to Docker daemon")
-        except Exception as e:
-            logger.error(f"❌ Failed to connect to Docker daemon: {e}")
-            logger.info("💡 Make sure Docker is running (Docker Desktop or Colima)")
-            # Try common socket paths for debugging
-            import os
+            # First try from environment
+            docker_client = docker.from_env()
+            docker_client.ping()
+            logger.info("✅ Connected to Docker daemon via environment")
+        except Exception as e1:
+            connection_error = e1
+            
+            # Try common socket paths
             socket_paths = [
                 "/var/run/docker.sock",
                 "/Users/greg/.colima/default/docker.sock",
                 os.path.expanduser("~/.colima/default/docker.sock")
             ]
-            for path in socket_paths:
-                if os.path.exists(path):
-                    logger.info(f"   Found Docker socket at: {path}")
-            raise
+            
+            for socket_path in socket_paths:
+                if os.path.exists(socket_path):
+                    try:
+                        docker_client = docker.DockerClient(base_url=f"unix://{socket_path}")
+                        docker_client.ping()
+                        logger.info(f"✅ Connected to Docker daemon via {socket_path}")
+                        break
+                    except Exception as e2:
+                        logger.debug(f"Failed to connect via {socket_path}: {e2}")
+                        continue
+            
+            if not docker_client:
+                logger.error(f"❌ Failed to connect to Docker daemon: {connection_error}")
+                logger.info("💡 Make sure Docker is running (Docker Desktop or Colima)")
+                raise connection_error
+        
+        self.docker = docker_client
         
         self.agents: Dict[str, docker.models.containers.Container] = {}
         self.network_name = "superagent-network"
@@ -95,15 +113,16 @@ class MVPOrchestrator:
         # Validate inputs
         workspace_path = self._validate_workspace(workspace_path)
         anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
+        oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
         
-        if not anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY is required")
+        # Either API key or OAuth token is required
+        if not anthropic_api_key and not oauth_token:
+            raise ValueError("Either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN is required")
         if not discord_token:
             raise ValueError("discord_token is required")
         
-        # Container environment
+        # Container environment - base settings
         env = {
-            "ANTHROPIC_API_KEY": anthropic_api_key,
             "DISCORD_TOKEN": discord_token,
             "DISCORD_MCP_URL": "http://discord-stateless-api:9091",  # Internal network
             "POSTGRES_URL": "postgresql://superagent:superagent@postgres:5432/superagent",
@@ -111,6 +130,15 @@ class MVPOrchestrator:
             "AGENT_PERSONALITY": personality,
             "WORKSPACE_PATH": "/workspace"
         }
+        
+        # Use OAuth token if available, otherwise use API key
+        if oauth_token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+            env["ANTHROPIC_AUTH_TOKEN"] = oauth_token  # Some versions may use this
+            logger.info("   Using OAuth token for Claude Max plan")
+        elif anthropic_api_key:
+            env["ANTHROPIC_API_KEY"] = anthropic_api_key
+            logger.info("   Using API key for Claude")
         
         # Volume mounts
         volumes = {
@@ -121,6 +149,9 @@ class MVPOrchestrator:
         ssh_path = Path.home() / ".ssh"
         if ssh_path.exists():
             volumes[str(ssh_path)] = {"bind": "/root/.ssh", "mode": "ro"}
+            
+        # Don't mount .claude directory - causes permission issues
+        # OAuth token is passed via environment variable instead
         
         logger.info(f"🚀 Spawning agent '{name}'...")
         logger.info(f"   Workspace: {workspace_path}")
@@ -128,10 +159,28 @@ class MVPOrchestrator:
         logger.info(f"   Personality: {personality}")
         
         try:
-            # Create and start container
-            # For now, use a simple test image until we get the Claude Code image
+            # Use authenticated image if available, otherwise use default
+            authenticated_image = "superagent/claude-code-authenticated:latest"
+            default_image = "deepworks/claude-code:latest"
+            
+            # Check if authenticated image exists
+            try:
+                self.docker.images.get(authenticated_image)
+                image = authenticated_image
+                logger.info(f"   Using authenticated image: {image}")
+            except docker.errors.ImageNotFound:
+                image = default_image
+                logger.info(f"   Using default image: {image}")
+            
+            # Pull image if not available locally
+            try:
+                self.docker.images.get(image)
+            except docker.errors.ImageNotFound:
+                logger.info(f"   Pulling {image}...")
+                self.docker.images.pull(image)
+            
             container = self.docker.containers.run(
-                "python:3.11-slim",  # Test with Python image first
+                image,
                 name=f"agent-{name}",
                 environment=env,
                 volumes=volumes,
@@ -141,7 +190,9 @@ class MVPOrchestrator:
                 remove=False,  # Keep container for debugging
                 tty=True,  # Allocate TTY for interactive sessions
                 stdin_open=True,  # Keep STDIN open
-                command=["sleep", "3600"]  # Keep container running for testing
+                working_dir="/home/coder/project",  # Claude Code working directory
+                # Let the container run its default entry point (Claude Code daemon)
+                command=None  # Use default CMD from image
             )
             
             self.agents[name] = container

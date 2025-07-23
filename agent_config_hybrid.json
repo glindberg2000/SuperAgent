@@ -1,0 +1,153 @@
+{
+  "agents": {
+    "grok4_agent": {
+      "name": "Grok4Agent",
+      "llm_type": "grok4",
+      "max_context_messages": 15,
+      "max_turns_per_thread": 30,
+      "response_delay": 2.0,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "Expert AI researcher and analyst with live web search capabilities",
+      "system_prompt_additions": "You excel at research, analysis, and providing detailed explanations. You have access to live web search through Grok."
+    },
+    "claude_agent": {
+      "name": "ClaudeAgent", 
+      "llm_type": "claude",
+      "max_context_messages": 20,
+      "max_turns_per_thread": 25,
+      "response_delay": 1.5,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "Thoughtful reasoning specialist and writing assistant",
+      "system_prompt_additions": "You excel at code analysis, writing, complex reasoning tasks, and detailed explanations."
+    },
+    "gemini_agent": {
+      "name": "GeminiAgent",
+      "llm_type": "gemini", 
+      "max_context_messages": 18,
+      "max_turns_per_thread": 20,
+      "response_delay": 1.0,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "Creative collaborator and multimodal specialist",
+      "system_prompt_additions": "You excel at creative tasks, multimodal analysis, collaborative problem-solving, and visual understanding."
+    },
+    "o3_agent": {
+      "name": "O3Agent",
+      "llm_type": "openai",
+      "model": "o3-mini",
+      "max_context_messages": 25,
+      "max_turns_per_thread": 40,
+      "response_delay": 1.2,
+      "ignore_bots": true,
+      "bot_allowlist": [],
+      "allowed_channels": [],
+      "personality": "Logical reasoning specialist and mathematical analyst",
+      "system_prompt_additions": "You excel at step-by-step reasoning, mathematical analysis, and logical problem-solving. Use clear, structured thinking."
+    }
+  },
+
+  "container_agents": {
+    "fullstackdev": {
+      "type": "container",
+      "workspace_path": "~/repos/SuperAgent",
+      "discord_token_env": "DISCORD_TOKEN2",
+      "personality": "Full-stack developer specializing in Python, Docker, system architecture, and SuperAgent development. Expert in containerization and multi-agent systems.",
+      "capabilities": ["coding", "file_operations", "system_design", "docker", "architecture"],
+      "description": "Primary development agent for SuperAgent system architecture and infrastructure"
+    },
+    
+    "coderdev1": {
+      "type": "container", 
+      "workspace_path": "~/repos/CryptoTaxCalc",
+      "discord_token_env": "DISCORD_TOKEN3",
+      "personality": "Backend developer focusing on data processing, API development, and cryptocurrency tax calculations. Expert in financial data analysis.",
+      "capabilities": ["coding", "api_development", "data_analysis", "financial_calculations"],
+      "description": "Specialized agent for CryptoTaxCalc development and financial analysis"
+    },
+    
+    "coderdev2": {
+      "type": "container",
+      "workspace_path": "~/repos/SuperAgent",
+      "discord_token_env": "DISCORD_TOKEN4",
+      "personality": "Frontend and integration specialist focusing on user interfaces, Discord integrations, and multi-agent coordination.",
+      "capabilities": ["coding", "frontend", "integrations", "discord_bots"],
+      "description": "UI and integration development agent"
+    }
+  },
+
+  "manager_agent": {
+    "name": "SuperAgent Manager",
+    "llm_type": "grok4",
+    "discord_token_env": "DISCORD_TOKEN_GROK",
+    "personality": "Orchestrator and coordinator of the SuperAgent multi-agent system",
+    "capabilities": [
+      "container_management",
+      "file_coordination", 
+      "task_delegation",
+      "system_monitoring",
+      "agent_communication"
+    ],
+    "system_prompt_additions": "You are the Manager Agent responsible for orchestrating the SuperAgent system. You can spawn containers, coordinate file sharing, delegate tasks, and monitor system health.",
+    "special_commands": [
+      "@spawn-agent <name> <workspace> - Spawn new container agent",
+      "@list-agents - Show all active agents", 
+      "@system-health - Check system status",
+      "@assign-task <agent> <task> - Delegate task to agent",
+      "@share-file <source_agent> <target_agent> <file> - Coordinate file sharing"
+    ]
+  },
+
+  "global_settings": {
+    "db_path": "data/agent_memory.db",
+    "postgres_url": "postgresql://superagent:superagent@localhost:5433/superagent",
+    "discord_api_url": "http://localhost:9091",
+    "log_directory": "logs",
+    "audit_retention_days": 30,
+    "max_response_length": 2000,
+    "enable_thread_awareness": true,
+    "shared_memory_enabled": true,
+    "container_network": "superagent-network",
+    "workspace_base_path": "~/repos"
+  },
+
+  "docker_settings": {
+    "default_image": "python:3.11-slim",
+    "claude_code_image": "deepworks/claude-code:latest",
+    "network_name": "superagent-network",
+    "restart_policy": "unless-stopped",
+    "health_check_interval": 30,
+    "container_timeout": 300
+  },
+
+  "discord_settings": {
+    "stateless_api_url": "http://localhost:9091",
+    "max_message_length": 2000,
+    "response_delay": 1.0,
+    "thread_awareness": true,
+    "bot_allowlist": [],
+    "manager_channels": ["general", "superagent", "dev"]
+  },
+
+  "file_coordination": {
+    "shared_mount_path": "/shared",
+    "individual_workspace": "/workspace", 
+    "document_library_path": "/documents",
+    "vector_storage_enabled": true,
+    "auto_sync_enabled": false,
+    "allowed_extensions": [".py", ".md", ".txt", ".json", ".yml", ".yaml", ".sh"]
+  },
+
+  "memory_settings": {
+    "shared_memory_enabled": true,
+    "vector_similarity_threshold": 0.7,
+    "max_context_memories": 10,
+    "memory_retention_days": 90,
+    "cross_agent_memory_sharing": true,
+    "embedding_model": "text-embedding-3-small"
+  }
+}

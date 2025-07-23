@@ -1,0 +1,3 @@
+[submodule "mcp-discord"]
+	path = mcp-discord
+	url = https://github.com/glindberg2000/mcp-discord.git
