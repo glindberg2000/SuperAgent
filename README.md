@@ -236,6 +236,7 @@ SuperAgent/
 ### **Key File Purposes:**
 
 - **Launchers**: `multi_agent_launcher_hybrid.py` (current) vs `multi_agent_launcher.py` (legacy)
+- **Container Orchestration**: `orchestrator_mvp.py` - standalone class imported by hybrid launcher
 - **Configs**: `agent_config_hybrid.json` (production) vs `agent_config.json` (basic)
 - **Security**: `mcp.json` contains Discord tokens - kept in .gitignore for cursor IDE
 - **Memory**: All conversation data stored in `data/agent_memory.db` (SQLite + local files)
