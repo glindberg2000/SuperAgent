@@ -135,37 +135,111 @@ python memory_client.py
 
 ## 📁 Project Structure
 
+### **Core Application Files**
 ```
 SuperAgent/
-├── README.md                          # This file
-├── CLAUDE.md                          # Project documentation
+├── README.md                          # Main project documentation
+├── CLAUDE.md                          # Claude Code specific instructions
 ├── requirements.txt                   # Python dependencies
-├── .env.example                       # Environment template
-├── enhanced_discord_agent.py          # Main Discord agent with memory
-├── llm_providers.py                   # LLM integrations (Grok4, Claude, Gemini)
-├── multi_agent_launcher_hybrid.py     # Hybrid multi-agent orchestration
-├── orchestrator_mvp.py                # Container orchestrator
-├── memory_client.py                   # PostgreSQL vector memory client
-├── agent_config_hybrid.json           # Agent configuration
-├── mcp.json                          # MCP Discord server config
-├── docker/                           # Docker configurations
-│   ├── claude-code-writable/         # Writable Claude Code container
-│   └── claude-code-authenticated/    # Authentication scripts
-├── mcp-discord/                      # Discord MCP HTTP server
-├── tests/                           # Test suite and validation tools
-│   ├── test_discord_identities.py  # Discord bot identity tests
-│   ├── validate_discord_config.py  # Configuration validator
-│   └── README.md                    # Testing documentation
-├── issues/                          # Known issues and resolutions
-│   ├── DISCORD_IDENTITY_ISSUE.md   # Discord bot identity fix
-│   └── README.md                    # Issues documentation
-└── docs/                            # Documentation
-    ├── troubleshooting/             # Troubleshooting guides
-    │   └── DOCKER_CONTAINER_ISSUE_DIAGNOSIS.md
-    ├── HYBRID_ARCHITECTURE.md       # Architecture details  
-    ├── DEVELOPER_GUIDE.md           # Developer customization
-    └── SuperAgent_MVP_PRD.md        # MVP requirements
+├── .env.example                       # Environment variables template
+├── .gitignore                         # Git ignore patterns (keeps secrets safe)
 ```
+
+### **Python Core Modules**
+```
+├── enhanced_discord_agent.py          # 🤖 Main Discord agent with memory & context
+├── llm_providers.py                   # 🧠 LLM API integrations (Grok4, Claude, Gemini, O3)
+├── multi_agent_launcher_hybrid.py     # 🚀 Primary launcher - hybrid host/container system
+├── multi_agent_launcher.py            # 📦 Legacy launcher - host process only
+├── orchestrator_mvp.py                # 🐳 Container orchestration and management
+├── memory_client.py                   # 🗄️ PostgreSQL + pgvector memory client
+├── setup_postgres_vector.sh           # 🛠️ PostgreSQL setup utility
+```
+
+### **Configuration Files**
+```
+├── agent_config.json                  # 🔧 Basic agent configurations (grok4, claude, gemini, o3)
+├── agent_config_hybrid.json           # 🔧 Enhanced hybrid system config with containers
+├── agent_configs_mvp.json             # 🔧 Container-specific MVP configuration
+├── example_custom_configs.json        # 📝 User customization examples
+├── mcp.json                          # 🔒 MCP Discord server config (ignored - contains tokens)
+├── memory.example.json               # 💾 Memory system example
+```
+
+### **Docker & Containers**
+```
+├── docker/                           # 🐳 Docker configurations
+│   ├── claude-code-writable/         # Writable Claude Code container setup
+│   │   ├── Dockerfile
+│   │   └── create_authenticated_image.py
+│   ├── claude-code-authenticated/    # Pre-authenticated container scripts  
+│   │   ├── Dockerfile
+│   │   └── setup.sh
+│   └── claude-code-max/              # Max plan container (legacy)
+│       └── Dockerfile
+```
+
+### **Discord Integration (Submodule)**
+```
+├── mcp-discord/                      # 📡 Discord HTTP API server (CRITICAL SUBMODULE)
+│   ├── discord_http_stateless.py    # Main Discord HTTP API server
+│   ├── docker-compose.yml           # Discord API container orchestration
+│   ├── README.md                     # Discord setup documentation
+│   ├── src/discord_mcp/             # MCP Discord source code
+│   └── [see SUBMODULE_MANAGEMENT.md for complete details]
+```
+
+### **Testing & Validation**
+```
+├── tests/                           # 🧪 Test suite and validation tools
+│   ├── test_discord_identities.py  # Discord bot identity regression tests
+│   ├── validate_discord_config.py  # Configuration validator  
+│   ├── discord_identity_test_report.json # Test results
+│   └── README.md                    # Testing documentation
+```
+
+### **Documentation**
+```
+├── docs/                            # 📚 Comprehensive documentation
+│   ├── SUBMODULE_MANAGEMENT.md      # 🚨 CRITICAL: mcp-discord submodule guide
+│   ├── HYBRID_ARCHITECTURE.md       # System architecture details
+│   ├── DEVELOPER_GUIDE.md           # Developer customization guide
+│   ├── ORCHESTRATOR_README.md       # Container orchestration guide
+│   ├── SuperAgent_MVP_PRD.md        # MVP requirements specification
+│   ├── CONTAINER_SETUP.md           # Container setup instructions
+│   ├── SuperAgent_Modernization_Roadmap.md # Development roadmap
+│   └── troubleshooting/             # 🛠️ Troubleshooting guides
+│       ├── DOCKER_CONTAINER_ISSUE_DIAGNOSIS.md
+│       └── README.md
+```
+
+### **Issues & Resolution Tracking**
+```
+├── issues/                          # 🐛 Known issues and resolutions
+│   ├── DISCORD_IDENTITY_ISSUE.md   # Discord bot identity regression fix
+│   └── README.md                    # Issues documentation
+```
+
+### **Generated Content (Ignored by Git)**
+```
+├── PRD/                             # 📋 Product Requirements Documents (local only)
+├── grok4_responses/                 # 🤖 Generated AI responses (local only)
+├── data/                           # 🗄️ SQLite databases and user data (local only)
+│   └── agent_memory.db             # Main conversation history
+├── logs/                           # 📝 Agent logs (auto-generated, local only)
+│   ├── discord_agent.log          # Main agent log
+│   ├── Grok4Agent/                 # Per-agent log directories
+│   ├── ClaudeAgent/
+│   └── [other agent logs]
+```
+
+### **Key File Purposes:**
+
+- **Launchers**: `multi_agent_launcher_hybrid.py` (current) vs `multi_agent_launcher.py` (legacy)
+- **Configs**: `agent_config_hybrid.json` (production) vs `agent_config.json` (basic)
+- **Security**: `mcp.json` contains Discord tokens - kept in .gitignore for cursor IDE
+- **Memory**: All conversation data stored in `data/agent_memory.db` (SQLite + local files)
+- **Submodule**: `mcp-discord/` is ESSENTIAL - provides Discord HTTP API server
 
 ## 🤖 Agent Types
 

@@ -1,59 +1,61 @@
-.venv/
-.env
-*.env
-memory.json
+# Python
 __pycache__/
 *.pyc
-.DS_Store
-*.log
-*.sqlite3
-.ipynb_checkpoints/
-.secrets/
-.idea/
-.vscode/
-*.bak
-*.swp
-*.swo
+*.pyo
+*.pyd
+.Python
 *.egg-info/
 dist/
 build/
-# OS generated files
-Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment and configuration files
+.env
+*.env
+mcp.json
+memory.json
+
+# IDE and editor files
+.idea/
+.vscode/
 .DS_Store
-# Test output
-htmlcov/
-.coverage
-.cache/
+Thumbs.db
+*.swp
+*.swo
+*.bak
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
 
 # Data directories (keep local, don't commit)
 data/
-logs/
 grok4_responses/
+PRD/
 
 # Generated content files
 *_response_*.md
 *_followup_*.md
 *_analysis_*.txt
-*.csv
 *_fmv_*.md
 
-# Environment files
-.env
-mcp.json
-
-# Database files
-*.db
-*.sqlite
+# Test and coverage
+htmlcov/
+.coverage
+.cache/
+.pytest_cache/
+.ipynb_checkpoints/
 
 # Temporary files
 *.tmp
 *.temp
-.DS_Store
-
-
-# Documentation and data directories
-PRD/
-data/
-logs/
-*.db
-*.log
+.secrets/
