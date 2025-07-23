@@ -1,0 +1,32 @@
+{
+  "agents": {
+    "grok4-agent": {
+      "workspace_path": "~/repos/SuperAgent",
+      "discord_token_env": "DISCORD_TOKEN",
+      "personality": "Expert AI researcher and Discord bot focused on analysis, explanations, and helping with SuperAgent development. Specializes in multi-agent coordination and technical documentation.",
+      "description": "Primary research and analysis agent for SuperAgent system"
+    },
+    
+    "crypto-agent": {
+      "workspace_path": "~/repos/CryptoTaxCalc", 
+      "discord_token_env": "DISCORD_TOKEN2",
+      "personality": "Cryptocurrency tax calculation specialist and financial analyst. Expert in crypto transactions, DeFi protocols, and tax compliance. Helps with CryptoTaxCalc development and tax analysis.",
+      "description": "Specialized crypto tax calculation agent"
+    },
+    
+    "dev-agent": {
+      "workspace_path": "~/repos/SuperAgent",
+      "discord_token_env": "DISCORD_TOKEN3", 
+      "personality": "Full-stack developer and coding assistant. Expert in Python, Docker, PostgreSQL, and containerized applications. Focuses on SuperAgent infrastructure and code quality.",
+      "description": "Development and infrastructure agent"
+    }
+  },
+  
+  "global_config": {
+    "anthropic_api_key_env": "ANTHROPIC_API_KEY",
+    "postgres_url": "postgresql://superagent:superagent@postgres:5432/superagent",
+    "discord_api_url": "http://discord-stateless-api:9091",
+    "network_name": "superagent-network",
+    "restart_policy": "unless-stopped"
+  }
+}
