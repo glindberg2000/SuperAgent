@@ -124,7 +124,7 @@ class MVPOrchestrator:
         # Container environment - base settings
         env = {
             "DISCORD_TOKEN": discord_token,
-            "DISCORD_MCP_URL": "http://discord-stateless-api:9091",  # Internal network
+            "DISCORD_MCP_URL": "http://discord-mcp-http:8000/mcp",  # MCP server endpoint
             "POSTGRES_URL": "postgresql://superagent:superagent@postgres:5432/superagent",
             "AGENT_NAME": name,
             "AGENT_PERSONALITY": personality,
@@ -144,6 +144,14 @@ class MVPOrchestrator:
         volumes = {
             workspace_path: {"bind": "/workspace", "mode": "rw"},
         }
+        
+        # Mount MCP client configuration for Claude Code
+        mcp_config_path = os.path.join(os.path.dirname(__file__), "docker", "mcp_client_config.json")
+        if os.path.exists(mcp_config_path):
+            volumes[mcp_config_path] = {"bind": "/root/.config/claude/mcp_servers.json", "mode": "ro"}
+            logger.info("   ✅ MCP Discord client configuration mounted")
+        else:
+            logger.warning("   ⚠️ MCP client configuration not found - Discord MCP tools may not be available")
         
         # Add SSH keys if they exist
         ssh_path = Path.home() / ".ssh"
