@@ -113,8 +113,11 @@ python multi_agent_launcher_hybrid.py --agents grok4_agent fullstackdev
 ## 🧪 Testing
 
 ```bash
-# Test hybrid launcher
-python test_hybrid_launcher.py
+# Validate Discord configuration
+python tests/validate_discord_config.py
+
+# Test Discord bot identities
+python tests/test_discord_identities.py
 
 # Test orchestrator
 python orchestrator_mvp.py
@@ -142,7 +145,16 @@ SuperAgent/
 │   ├── claude-code-writable/         # Writable Claude Code container
 │   └── claude-code-authenticated/    # Authentication scripts
 ├── mcp-discord/                      # Discord MCP HTTP server
+├── tests/                           # Test suite and validation tools
+│   ├── test_discord_identities.py  # Discord bot identity tests
+│   ├── validate_discord_config.py  # Configuration validator
+│   └── README.md                    # Testing documentation
+├── issues/                          # Known issues and resolutions
+│   ├── DISCORD_IDENTITY_ISSUE.md   # Discord bot identity fix
+│   └── README.md                    # Issues documentation
 └── docs/                            # Documentation
+    ├── troubleshooting/             # Troubleshooting guides
+    │   └── DOCKER_CONTAINER_ISSUE_DIAGNOSIS.md
     ├── HYBRID_ARCHITECTURE.md       # Architecture details  
     ├── DEVELOPER_GUIDE.md           # Developer customization
     └── SuperAgent_MVP_PRD.md        # MVP requirements

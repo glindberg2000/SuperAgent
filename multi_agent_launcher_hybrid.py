@@ -246,14 +246,21 @@ class HybridMultiAgentLauncher:
             'openai': os.getenv('OPENAI_API_KEY')
         }
         
-        # Get bot tokens (try agent-specific first, then fall back to shared)
+        # Get bot tokens (map to available tokens for different identities)
         bot_tokens = {
-            'grok4': os.getenv('DISCORD_TOKEN_GROK'),
-            'claude': os.getenv('DISCORD_TOKEN_CLAUDE') or os.getenv('DISCORD_TOKEN_GROK'),
-            'gemini': os.getenv('DISCORD_TOKEN_GEMINI') or os.getenv('DISCORD_TOKEN_GROK'),
-            'openai': os.getenv('DISCORD_TOKEN_O3') or os.getenv('DISCORD_TOKEN_GROK'),
-            'manager': os.getenv('DISCORD_TOKEN_GROK')  # Manager uses primary token
+            'grok4': os.getenv('DISCORD_TOKEN_GROK'),     # Primary bot
+            'claude': os.getenv('DISCORD_TOKEN2'),        # Second bot identity  
+            'gemini': os.getenv('DISCORD_TOKEN3'),        # Third bot identity
+            'openai': os.getenv('DISCORD_TOKEN_GROK'),    # Share with grok4 for now
+            'manager': os.getenv('DISCORD_TOKEN_GROK')    # Manager uses primary token
         }
+        
+        # Validate token uniqueness (warn about duplicate identities)
+        unique_tokens = set(token for token in bot_tokens.values() if token)
+        if len(unique_tokens) < len([t for t in bot_tokens.values() if t]):
+            logger.warning("⚠️  DISCORD IDENTITY WARNING: Some agents share the same Discord token!")
+            logger.warning("   All agents with the same token will appear as the same Discord bot.")
+            logger.warning("   Run 'python tests/validate_discord_config.py' for setup instructions.")
         
         llm_type = agent_data.get('llm_type', 'grok4')  # Default to grok4 for manager
         api_key = api_keys.get(llm_type)

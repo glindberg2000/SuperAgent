@@ -1,0 +1,41 @@
+{
+  "timestamp": 1753249494.632542,
+  "api_results": {
+    "GROK4_BOT": {
+      "success": true,
+      "bot_info": "Grok4#9554",
+      "message_id": "1397454321221767323",
+      "error": null
+    },
+    "CLAUDE_BOT": {
+      "success": true,
+      "bot_info": "CryptoTax_CoderDev1#8967",
+      "message_id": "1397454322937364582",
+      "error": null
+    },
+    "GEMINI_BOT": {
+      "success": false,
+      "error": "Request failed: HTTPConnectionPool(host='localhost', port=9091): Read timed out. (read timeout=10)"
+    },
+    "TEST_BOT_1": {
+      "success": true,
+      "bot_info": "Grok4#9554",
+      "message_id": "1397454365970927689",
+      "error": null
+    },
+    "TEST_BOT_2": {
+      "success": true,
+      "bot_info": "CryptoTax_CoderDev1#8967",
+      "message_id": "1397454367006658610",
+      "error": null
+    },
+    "TEST_BOT_3": {
+      "success": false,
+      "error": "Request failed: HTTPConnectionPool(host='localhost', port=9091): Read timed out. (read timeout=10)"
+    }
+  },
+  "unique_identities": 2,
+  "total_tokens": 6,
+  "successful_tests": 4,
+  "identity_regression": false
+}
