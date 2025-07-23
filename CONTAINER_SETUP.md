@@ -57,6 +57,9 @@ This creates:
 
 #### Discord HTTP API
 ```bash
+# The Discord HTTP API is located in the mcp-discord repository
+cd mcp-discord
+
 # Start Discord HTTP server
 python discord_http_api.py
 
@@ -75,6 +78,9 @@ curl http://localhost:9090/channels
 
 # Send test message
 curl -X POST http://localhost:9090/test
+
+# Or use the test script from mcp-discord repo
+cd mcp-discord && python test_discord_http.py
 ```
 
 #### Test Memory System
