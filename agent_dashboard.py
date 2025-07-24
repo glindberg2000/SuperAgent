@@ -37,8 +37,7 @@ except ImportError:
 from dotenv import load_dotenv
 load_dotenv()
 
-# Import manager for team and config access
-from superagent_manager import SuperAgentManager
+# Self-contained dashboard - no external manager imports to avoid circular dependencies
 
 class SuperAgentDashboard:
     """Beautiful CLI dashboard for SuperAgent monitoring"""
@@ -51,14 +50,33 @@ class SuperAgentDashboard:
         self.agents_status = {}
         self.last_update = datetime.now()
         
-        # Initialize manager for teams and config access
-        self.manager = SuperAgentManager()
+        # Load agent configuration for teams and configs
+        self.config_file = Path("agent_config.json")
+        self.agent_config_data = self._load_config_data()
         
         # Initialize Docker client
         try:
             self.docker_client = docker.from_env()
         except Exception:
             pass
+    
+    def _load_config_data(self) -> Dict:
+        """Load agent configuration data"""
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load config file: {e}")
+        return {"agents": {}, "teams": {}}
+    
+    def get_teams_data(self) -> Dict:
+        """Get teams configuration data"""
+        return self.agent_config_data.get('teams', {})
+    
+    def get_agent_configs_data(self) -> Dict:
+        """Get agent configurations data"""
+        return self.agent_config_data.get('agents', {})
     
     def get_system_status(self) -> Dict:
         """Get system resource status"""
@@ -404,7 +422,7 @@ class SuperAgentDashboard:
     def create_teams_panel(self) -> Panel:
         """Create teams configuration panel"""
         try:
-            teams = self.manager.list_teams()
+            teams = self.get_teams_data()
             if not teams:
                 return Panel(
                     "[yellow]No teams configured[/yellow]",
@@ -454,7 +472,16 @@ class SuperAgentDashboard:
     def create_configs_panel(self) -> Panel:
         """Create agent configurations panel"""
         try:
-            configs = self.manager.show_agent_configs()
+            configs_data = self.get_agent_configs_data()
+            # Format configs data for display
+            configs_lines = []
+            for agent_name, agent_config in configs_data.items():
+                configs_lines.append(f"Agent: {agent_name}")
+                configs_lines.append(f"  LLM: {agent_config.get('llm_type', 'unknown')}")
+                configs_lines.append(f"  Max Context: {agent_config.get('max_context_messages', 'N/A')}")
+                configs_lines.append(f"  Max Turns: {agent_config.get('max_turns_per_thread', 'N/A')}")
+                configs_lines.append("")
+            configs = "\n".join(configs_lines)
             if not configs:
                 return Panel(
                     "[yellow]No agent configs found[/yellow]",

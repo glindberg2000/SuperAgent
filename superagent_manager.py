@@ -14,9 +14,10 @@ from typing import Dict, List, Optional, Tuple
 import argparse
 from datetime import datetime
 import psutil
+import json
 
 from dotenv import load_dotenv
-from agent_dashboard import SuperAgentDashboard
+# Dashboard import removed to avoid circular dependency
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +29,10 @@ class SuperAgentManager:
         self.running_agents = {}
         self.logs_dir = Path("logs")
         self.logs_dir.mkdir(exist_ok=True)
+        
+        # Load agent and team configuration from agent_config.json
+        self.config_file = Path(__file__).parent / "agent_config.json"
+        self.load_config()
         
         # Available agent types and their configurations
         self.agent_configs = {
@@ -60,6 +65,22 @@ class SuperAgentManager:
                 "llm_type": "openai"
             }
         }
+    
+    def load_config(self):
+        """Load teams and agent configuration from JSON file"""
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r') as f:
+                    config_data = json.load(f)
+                    self.teams_config = config_data.get('teams', {})
+                    self.global_settings = config_data.get('global_settings', {})
+            else:
+                self.teams_config = {}
+                self.global_settings = {}
+        except Exception as e:
+            print(f"Warning: Could not load config file: {e}")
+            self.teams_config = {}
+            self.global_settings = {}
     
     def validate_agent_config(self, agent_type: str) -> Tuple[bool, str]:
         """Validate agent configuration and tokens"""
@@ -256,6 +277,154 @@ class SuperAgentManager:
         # Start again
         return self.deploy_agent(agent_type)
     
+    def list_teams(self) -> Dict:
+        """List all available teams and their status"""
+        teams_status = {}
+        
+        for team_id, team_config in self.teams_config.items():
+            # Check which agents in the team are running
+            running_agents = []
+            stopped_agents = []
+            
+            for agent_type in team_config.get('agents', []):
+                if self._find_running_agent(agent_type):
+                    running_agents.append(agent_type)
+                else:
+                    stopped_agents.append(agent_type)
+            
+            teams_status[team_id] = {
+                "name": team_config.get("name", team_id),
+                "description": team_config.get("description", ""),
+                "agents": team_config.get("agents", []),
+                "running_agents": running_agents,
+                "stopped_agents": stopped_agents,
+                "status": "fully_running" if len(stopped_agents) == 0 else "partially_running" if len(running_agents) > 0 else "stopped",
+                "server_id": team_config.get("default_server_id"),
+                "gm_channel": team_config.get("gm_channel"),
+                "auto_deploy": team_config.get("auto_deploy", False),
+                "coordination_mode": team_config.get("coordination_mode", "parallel")
+            }
+        
+        return teams_status
+    
+    def deploy_team(self, team_id: str) -> Tuple[bool, str]:
+        """Deploy all agents in a team"""
+        if team_id not in self.teams_config:
+            return False, f"Unknown team: {team_id}"
+        
+        team_config = self.teams_config[team_id]
+        agents = team_config.get("agents", [])
+        
+        if not agents:
+            return False, f"Team {team_id} has no agents configured"
+        
+        results = []
+        success_count = 0
+        
+        for agent_type in agents:
+            success, msg = self.deploy_agent(agent_type)
+            results.append(f"   • {agent_type}: {msg}")
+            if success:
+                success_count += 1
+        
+        team_name = team_config.get("name", team_id)
+        if success_count == len(agents):
+            return True, f"Successfully deployed team '{team_name}' ({success_count}/{len(agents)} agents):\n" + "\n".join(results)
+        elif success_count > 0:
+            return True, f"Partially deployed team '{team_name}' ({success_count}/{len(agents)} agents):\n" + "\n".join(results)
+        else:
+            return False, f"Failed to deploy team '{team_name}' (0/{len(agents)} agents):\n" + "\n".join(results)
+    
+    def stop_team(self, team_id: str) -> Tuple[bool, str]:
+        """Stop all agents in a team"""
+        if team_id not in self.teams_config:
+            return False, f"Unknown team: {team_id}"
+        
+        team_config = self.teams_config[team_id]
+        agents = team_config.get("agents", [])
+        
+        if not agents:
+            return False, f"Team {team_id} has no agents configured"
+        
+        results = []
+        success_count = 0
+        
+        for agent_type in agents:
+            success, msg = self.stop_agent(agent_type)
+            results.append(f"   • {agent_type}: {msg}")
+            if success:
+                success_count += 1
+        
+        team_name = team_config.get("name", team_id)
+        if success_count == len(agents):
+            return True, f"Successfully stopped team '{team_name}' ({success_count}/{len(agents)} agents):\n" + "\n".join(results)
+        else:
+            return True, f"Partially stopped team '{team_name}' ({success_count}/{len(agents)} agents):\n" + "\n".join(results)
+    
+    def show_agent_configs(self, agent_type: str = None, verbose: bool = False) -> str:
+        """Show agent configurations in a compact, readable format"""
+        if agent_type:
+            # Show specific agent
+            if agent_type not in self.agent_configs:
+                return f"❌ Unknown agent: {agent_type}"
+            
+            config = self.agent_configs[agent_type]
+            return self._format_agent_config(agent_type, config, verbose)
+        else:
+            # Show all agents
+            output = ["🤖 Agent Configurations", "=" * 50]
+            
+            for agent_id, config in self.agent_configs.items():
+                output.append("")
+                output.append(self._format_agent_config(agent_id, config, verbose))
+            
+            return "\n".join(output)
+    
+    def _format_agent_config(self, agent_id: str, config: Dict, verbose: bool = False) -> str:
+        """Format a single agent config"""
+        # Get environment values
+        token = os.getenv(config["token_env"], "❌ NOT SET")
+        api_key = os.getenv(config["api_key_env"], "❌ NOT SET")
+        server_id = os.getenv("DEFAULT_SERVER_ID", "❌ NOT SET")
+        
+        # Truncate tokens for security/readability
+        token_display = f"✅ {token[:8]}..." if token != "❌ NOT SET" else token
+        api_key_display = f"✅ {api_key[:8]}..." if api_key != "❌ NOT SET" else api_key
+        
+        # Check if running
+        running_pid = self._find_running_agent(agent_id)
+        status = f"🟢 Running (PID: {running_pid})" if running_pid else "⚪ Stopped"
+        
+        # LLM type icons
+        llm_icons = {
+            "grok4": "🧠",
+            "claude": "🤖", 
+            "gemini": "💎",
+            "openai": "⚡"
+        }
+        llm_icon = llm_icons.get(config["llm_type"], "🔧")
+        
+        output = [
+            f"{llm_icon} {config['name']} ({agent_id}) - {status}",
+            f"   LLM: {config['llm_type'].upper()} | {config['description']}"
+        ]
+        
+        if verbose:
+            output.extend([
+                f"   Discord Token ({config['token_env']}): {token_display}",
+                f"   API Key ({config['api_key_env']}): {api_key_display}",
+                f"   Server ID: {server_id}"
+            ])
+        else:
+            # Compact status indicators
+            token_status = "🟢" if token != "❌ NOT SET" else "❌"
+            api_status = "🟢" if api_key != "❌ NOT SET" else "❌"
+            server_status = "🟢" if server_id != "❌ NOT SET" else "❌"
+            
+            output.append(f"   Config: Token {token_status} | API {api_status} | Server {server_status}")
+        
+        return "\n".join(output)
+    
     def cleanup(self):
         """Clean up all running agents"""
         print("🛑 Stopping all agents...")
@@ -301,6 +470,30 @@ def main():
     # Validate command
     validate_parser = subparsers.add_parser('validate', help='Validate agent configuration')
     validate_parser.add_argument('agent_type', choices=['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'])
+    
+    # Team commands
+    teams_parser = subparsers.add_parser('teams', help='Team management commands')
+    team_subparsers = teams_parser.add_subparsers(dest='team_command', help='Team commands')
+    
+    # List teams
+    team_subparsers.add_parser('list', help='List all teams and their status')
+    
+    # Deploy team
+    deploy_team_parser = team_subparsers.add_parser('deploy', help='Deploy a team')
+    deploy_team_parser.add_argument('team_id', help='Team ID to deploy')
+    
+    # Stop team
+    stop_team_parser = team_subparsers.add_parser('stop', help='Stop a team')
+    stop_team_parser.add_argument('team_id', help='Team ID to stop')
+    
+    # Team status
+    team_status_parser = team_subparsers.add_parser('status', help='Get team status')
+    team_status_parser.add_argument('team_id', help='Team ID to check')
+    
+    # Config command
+    config_parser = subparsers.add_parser('config', help='Show agent configurations')
+    config_parser.add_argument('--agent', help='Show specific agent config')
+    config_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed config')
     
     args = parser.parse_args()
     
@@ -399,6 +592,71 @@ def main():
             from interactive_dashboard import InteractiveDashboard
             dashboard = InteractiveDashboard()
             asyncio.run(dashboard.run_interactive(args.refresh))
+        
+        elif args.command == 'teams':
+            if not args.team_command:
+                teams_parser.print_help()
+                return
+            
+            if args.team_command == 'list':
+                teams_status = manager.list_teams()
+                print("🏢 SuperAgent Teams Status")
+                print("=" * 60)
+                
+                if not teams_status:
+                    print("No teams configured")
+                    return
+                
+                for team_id, info in teams_status.items():
+                    status_icon = "🟢" if info["status"] == "fully_running" else "🟡" if info["status"] == "partially_running" else "⚪"
+                    print(f"\n{status_icon} {info['name']} ({team_id})")
+                    print(f"   Description: {info['description']}")
+                    print(f"   Status: {info['status']}")
+                    print(f"   Agents: {', '.join(info['agents'])}")
+                    if info['running_agents']:
+                        print(f"   Running: {', '.join(info['running_agents'])}")
+                    if info['stopped_agents']:
+                        print(f"   Stopped: {', '.join(info['stopped_agents'])}")
+                    print(f"   Server: {info['server_id']}")
+                    print(f"   GM Channel: {info['gm_channel']}")
+                    print(f"   Auto-deploy: {'Yes' if info['auto_deploy'] else 'No'}")
+                    print(f"   Coordination: {info['coordination_mode']}")
+            
+            elif args.team_command == 'deploy':
+                success, msg = manager.deploy_team(args.team_id)
+                if success:
+                    print(f"✅ {msg}")
+                else:
+                    print(f"❌ {msg}")
+                    sys.exit(1)
+            
+            elif args.team_command == 'stop':
+                success, msg = manager.stop_team(args.team_id)
+                if success:
+                    print(f"✅ {msg}")
+                else:
+                    print(f"❌ {msg}")
+                    sys.exit(1)
+            
+            elif args.team_command == 'status':
+                teams_status = manager.list_teams()
+                if args.team_id not in teams_status:
+                    print(f"❌ Unknown team: {args.team_id}")
+                    sys.exit(1)
+                
+                info = teams_status[args.team_id]
+                status_icon = "🟢" if info["status"] == "fully_running" else "🟡" if info["status"] == "partially_running" else "⚪"
+                print(f"{status_icon} Team: {info['name']} ({args.team_id})")
+                print(f"   Status: {info['status']}")
+                print(f"   Running agents ({len(info['running_agents'])}): {', '.join(info['running_agents']) if info['running_agents'] else 'None'}")
+                print(f"   Stopped agents ({len(info['stopped_agents'])}): {', '.join(info['stopped_agents']) if info['stopped_agents'] else 'None'}")
+                print(f"   Server: {info['server_id']}")
+                print(f"   GM Channel: {info['gm_channel']}")
+                print(f"   Coordination: {info['coordination_mode']}")
+        
+        elif args.command == 'config':
+            result = manager.show_agent_configs(args.agent, args.verbose)
+            print(result)
     
     except KeyboardInterrupt:
         print("\n👋 Goodbye!")
