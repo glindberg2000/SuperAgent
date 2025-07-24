@@ -54,11 +54,22 @@ class SuperAgentDashboard:
         self.config_file = Path("agent_config.json")
         self.agent_config_data = self._load_config_data()
         
-        # Initialize Docker client
+        # Initialize Docker client with multiple fallback options
+        self.docker_client = None
+        
+        # Try Colima socket first (seems to be working on this system)
         try:
-            self.docker_client = docker.from_env()
+            self.docker_client = docker.DockerClient(base_url='unix:///Users/greg/.colima/default/docker.sock')
         except Exception:
-            pass
+            # Try Docker Desktop environment
+            try:
+                self.docker_client = docker.from_env()
+            except Exception:
+                # Try standard docker socket
+                try:
+                    self.docker_client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
+                except Exception:
+                    pass
     
     def _load_config_data(self) -> Dict:
         """Load agent configuration data"""
@@ -235,8 +246,12 @@ class SuperAgentDashboard:
             return containers
             
         try:
-            for container in self.docker_client.containers.list(all=True):
-                if any(label in container.name.lower() for label in ['superagent', 'claude-code', 'grok', 'discord', 'postgres']):
+            all_containers = self.docker_client.containers.list(all=True)
+            for container in all_containers:
+                container_name = container.name.lower()
+                # More specific check for SuperAgent-related containers
+                if any(label in container_name for label in ['superagent', 'claude-code', 'grok', 'discord']) or \
+                   'postgres' in container_name and ('superagent' in container_name or 'letta' in container_name):
                     containers[container.name] = {
                         "id": container.id[:12],
                         "status": container.status,
@@ -244,7 +259,8 @@ class SuperAgentDashboard:
                         "ports": container.ports,
                         "created": container.attrs['Created']
                     }
-        except Exception:
+        except Exception as e:
+            # Debug: show why Docker detection failed
             pass
             
         return containers
