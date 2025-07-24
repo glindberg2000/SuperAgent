@@ -194,48 +194,55 @@ class InteractiveDashboard(SuperAgentDashboard):
                     except queue.Empty:
                         pass
                     
-                    # Update layout
+                    # Create simplified layout
                     layout = Layout()
                     layout.split_row(
                         Layout(name="main", ratio=3),
                         Layout(name="sidebar", ratio=1)
                     )
                     
-                    # Main dashboard content
-                    main_layout = Layout(name="dashboard")
-                    main_layout.split_column(
+                    # Main content
+                    main_content = Layout()
+                    main_content.split_column(
                         Layout(self.create_header(), size=3),
-                        Layout(name="content", ratio=1),
+                        Layout(name="grid", ratio=2),
+                        Layout(self.create_logs_panel(), size=12),
                         Layout(self.create_command_result_panel(last_command_result), size=8)
                     )
                     
-                    # Content grid
-                    content_layout = Layout(name="grid")
-                    content_layout.split_row(
+                    # Grid layout
+                    grid = Layout()
+                    grid.split_row(
                         Layout(name="left"),
                         Layout(name="right")
                     )
                     
-                    content_layout["left"].split_column(
-                        Layout(self.create_system_panel(), name="system"),
-                        Layout(self.create_agents_panel(), name="agents")
+                    # Left column
+                    left_col = Layout()
+                    left_col.split_column(
+                        Layout(self.create_system_panel()),
+                        Layout(self.create_agents_panel())
                     )
                     
-                    content_layout["right"].split_column(
-                        Layout(self.create_postgres_panel(), name="postgres"),
-                        Layout(self.create_containers_panel(), name="containers")
+                    # Right column  
+                    right_col = Layout()
+                    right_col.split_column(
+                        Layout(self.create_postgres_panel()),
+                        Layout(self.create_containers_panel())
                     )
                     
-                    main_layout["content"] = content_layout
-                    layout["main"] = main_layout
+                    grid["left"].update(left_col)
+                    grid["right"].update(right_col)
+                    main_content["grid"].update(grid)
+                    layout["main"].update(main_content)
                     
-                    # Sidebar with help and command input
-                    sidebar_layout = Layout()
-                    sidebar_layout.split_column(
+                    # Sidebar
+                    sidebar = Layout()
+                    sidebar.split_column(
                         Layout(self.create_help_panel(), size=20),
                         Layout(self.create_command_panel(), size=5)
                     )
-                    layout["sidebar"] = sidebar_layout
+                    layout["sidebar"].update(sidebar)
                     
                     live.update(layout)
                     await asyncio.sleep(refresh_interval)
