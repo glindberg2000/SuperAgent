@@ -10,91 +10,72 @@
     "memory_percent_warning": 85,
     "disk_percent_warning": 90
   },
-  "agent_templates": {
-    "grok4": {
-      "image": "superagent/claude-code:latest",
+  "container_agent_templates": {
+    "fullstackdev": {
+      "image": "superagent/official-claude-code:latest",
       "environment": {
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
-        "DISCORD_TOKEN": "${DISCORD_TOKEN_GROK}",
-        "AGENT_TYPE": "grok4",
-        "AGENT_PERSONALITY": "Research expert focused on analysis and detailed explanations"
-      },
-      "volumes": {
-        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
-      },
-      "labels": {
-        "superagent.type": "grok4",
-        "superagent.managed": "true"
-      },
-      "capabilities": ["research", "analysis", "web_search", "data_processing"]
-    },
-    "claude": {
-      "image": "superagent/claude-code:latest", 
-      "environment": {
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
         "DISCORD_TOKEN": "${DISCORD_TOKEN2}",
-        "AGENT_TYPE": "claude",
-        "AGENT_PERSONALITY": "Code development expert focused on writing, debugging, and system architecture"
+        "AGENT_TYPE": "fullstackdev",
+        "AGENT_PERSONALITY": "Full-stack developer specializing in Python, Docker, system architecture, and SuperAgent development. Expert in containerization and multi-agent systems."
       },
       "volumes": {
-        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+        "/workspace": "/tmp/workspace"
       },
       "labels": {
-        "superagent.type": "claude",
+        "superagent.type": "fullstackdev",
         "superagent.managed": "true"
       },
-      "capabilities": ["coding", "debugging", "architecture", "documentation"]
+      "capabilities": ["coding", "file_operations", "system_design", "docker", "architecture"],
+      "deployable": true
     },
-    "gemini": {
-      "image": "superagent/claude-code:latest",
+    "coderdev1": {
+      "image": "superagent/official-claude-code:latest", 
       "environment": {
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
         "DISCORD_TOKEN": "${DISCORD_TOKEN3}",
-        "AGENT_TYPE": "gemini", 
-        "AGENT_PERSONALITY": "Creative specialist focused on multimodal analysis and innovative solutions"
+        "AGENT_TYPE": "coderdev1",
+        "AGENT_PERSONALITY": "Backend developer focusing on data processing, API development, and cryptocurrency tax calculations. Expert in financial data analysis."
       },
       "volumes": {
-        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+        "/workspace": "/tmp/workspace"
       },
       "labels": {
-        "superagent.type": "gemini",
+        "superagent.type": "coderdev1",
         "superagent.managed": "true"
       },
-      "capabilities": ["creativity", "multimodal", "innovation", "collaboration"]
+      "capabilities": ["coding", "api_development", "data_analysis", "financial_calculations"],
+      "deployable": true
     },
-    "manager": {
-      "image": "superagent/claude-code:latest",
+    "coderdev2": {
+      "image": "superagent/official-claude-code:latest", 
       "environment": {
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
-        "DISCORD_TOKEN": "${DISCORD_TOKEN_MANAGER:-${DISCORD_TOKEN_GROK}}",
-        "AGENT_TYPE": "manager",
-        "AGENT_PERSONALITY": "Team coordinator focused on task assignment, project management, and workflow optimization"
+        "DISCORD_TOKEN": "${DISCORD_TOKEN4}",
+        "AGENT_TYPE": "coderdev2",
+        "AGENT_PERSONALITY": "Frontend and integration specialist focusing on user interfaces, Discord integrations, and multi-agent coordination."
       },
       "volumes": {
-        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+        "/workspace": "/tmp/workspace"
       },
       "labels": {
-        "superagent.type": "manager",
+        "superagent.type": "coderdev2",
         "superagent.managed": "true"
       },
-      "capabilities": ["coordination", "planning", "task_assignment", "progress_tracking"]
-    },
-    "fullstack": {
-      "image": "superagent/claude-code:latest",
+      "capabilities": ["coding", "frontend", "integrations", "discord_bots"],
+      "deployable": false
+    }
+  },
+  "non_container_agents": {
+    "grok4_agent": {
+      "type": "enhanced_discord_agent",
+      "script": "enhanced_discord_agent.py",
+      "config_file": "agent_config.json",
+      "config_key": "grok4_agent",
       "environment": {
-        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
-        "DISCORD_TOKEN": "${DISCORD_TOKEN_FULLSTACK:-${DISCORD_TOKEN2}}",
-        "AGENT_TYPE": "fullstack",
-        "AGENT_PERSONALITY": "Full-stack development specialist with expertise in frontend, backend, and deployment"
+        "DISCORD_TOKEN": "${DISCORD_TOKEN_GROK}",
+        "AGENT_TYPE": "grok4_agent"
       },
-      "volumes": {
-        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
-      },
-      "labels": {
-        "superagent.type": "fullstack",
-        "superagent.managed": "true"
-      },
-      "capabilities": ["frontend", "backend", "databases", "deployment", "testing"]
+      "capabilities": ["research", "analysis", "web_search", "data_processing", "memory", "database"],
+      "deployable": true,
+      "description": "Expert AI researcher with live web search, memory, and database access"
     }
   },
   "default_team_compositions": {

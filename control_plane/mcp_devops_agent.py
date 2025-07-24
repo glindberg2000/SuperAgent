@@ -251,19 +251,32 @@ class MCPDevOpsAgent:
         
         available_types = {}
         
-        # 1. Load from DevOps config (agent_templates)
-        devops_templates = self.config.get('agent_templates', {})
-        for agent_type, template in devops_templates.items():
+        # 1. Load from DevOps config (container agents)
+        container_templates = self.config.get('container_agent_templates', {})
+        for agent_type, template in container_templates.items():
             available_types[agent_type] = {
-                'source': 'devops_config',
+                'source': 'devops_container_config',
+                'type': 'container',
                 'image': template.get('image', 'unknown'),
                 'capabilities': template.get('capabilities', []),
                 'personality': template.get('environment', {}).get('AGENT_PERSONALITY', 'General AI assistant'),
                 'labels': template.get('labels', {}),
-                'deployable': True
+                'deployable': template.get('deployable', True)
             }
         
-        # 2. Load from main agent config (for reference)
+        # 2. Load from DevOps config (non-container agents)
+        non_container_templates = self.config.get('non_container_agents', {})
+        for agent_type, template in non_container_templates.items():
+            available_types[agent_type] = {
+                'source': 'devops_non_container_config',
+                'type': 'non_container',
+                'script': template.get('script', 'unknown'),
+                'capabilities': template.get('capabilities', []),  
+                'personality': template.get('description', 'General AI assistant'),
+                'deployable': template.get('deployable', True)
+            }
+        
+        # 3. Load from main agent config (for reference)
         try:
             agent_config_path = Path(__file__).parent.parent / "agent_config.json"
             if agent_config_path.exists():
@@ -292,21 +305,21 @@ class MCPDevOpsAgent:
         except Exception as e:
             self.logger.debug(f"Could not load agent_config.json: {e}")
         
-        # 3. Check available Docker images
+        # 4. Check available Docker images (only for container agents)
         if self.docker_client:
             try:
                 images = self.docker_client.images.list()
-                superagent_images = [img for img in images 
-                                   if any('superagent' in tag for tag in img.tags or [])]
                 
-                for agent_type in available_types:
-                    # Check if there's a suitable image available
-                    template = devops_templates.get(agent_type, {})
-                    required_image = template.get('image', '')
-                    
-                    image_available = any(required_image in (tag for tag in img.tags or []) 
-                                        for img in images)
-                    available_types[agent_type]['image_available'] = image_available
+                for agent_type, agent_info in available_types.items():
+                    if agent_info.get('type') == 'container':
+                        # Check if there's a suitable image available
+                        required_image = agent_info.get('image', '')
+                        image_available = any(required_image in (tag for tag in img.tags or []) 
+                                            for img in images)
+                        available_types[agent_type]['image_available'] = image_available
+                    else:
+                        # Non-container agents don't need Docker images
+                        available_types[agent_type]['image_available'] = True
                     
             except Exception as e:
                 self.logger.debug(f"Could not check Docker images: {e}")
@@ -326,11 +339,25 @@ class MCPDevOpsAgent:
         
         descriptions = []
         for agent_type, info in agent_types.items():
-            status = "✅" if info.get('deployable', False) else "⚠️"
+            # Determine status
+            deployable = info.get('deployable', False)
+            image_available = info.get('image_available', True)
+            agent_type_icon = "🐳" if info.get('type') == 'container' else "🧠"
+            
+            if deployable and image_available:
+                status = "✅"
+            elif deployable and not image_available:
+                status = "⚠️"  # Deployable but missing image
+            else:
+                status = "❌"  # Not deployable
+            
             capabilities = ", ".join(info.get('capabilities', [])) or "general"
             personality = info.get('personality', 'AI assistant')
             
-            descriptions.append(f"- {status} **{agent_type}**: {personality} ({capabilities})")
+            # Show container vs non-container type
+            type_info = f"({info.get('type', 'unknown')})"
+            
+            descriptions.append(f"- {status} {agent_type_icon} **{agent_type}**: {personality} {type_info}")
         
         return "\n".join(descriptions)
     
@@ -857,15 +884,37 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
     
     # Docker Management Tools
     async def deploy_agent(self, agent_type: str, team: str = None, name: str = None) -> Dict[str, Any]:
-        """Deploy a new agent container"""
+        """Deploy a new agent (container or non-container)"""
+        try:
+            # Get agent info from dynamic discovery
+            available_agents = self._get_available_agent_types()
+            if agent_type not in available_agents:
+                return {"success": False, "error": f"Unknown agent type: {agent_type}"}
+            
+            agent_info = available_agents[agent_type]
+            
+            # Route to appropriate deployment method
+            if agent_info.get('type') == 'container':
+                return await self._deploy_container_agent(agent_type, agent_info, team, name)
+            elif agent_info.get('type') == 'non_container':
+                return await self._deploy_non_container_agent(agent_type, agent_info, team, name)
+            else:
+                return {"success": False, "error": f"Unknown agent deployment type: {agent_info.get('type')}"}
+            
+        except Exception as e:
+            self.logger.error(f"Error deploying agent {agent_type}: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def _deploy_container_agent(self, agent_type: str, agent_info: Dict[str, Any], team: str = None, name: str = None) -> Dict[str, Any]:
+        """Deploy a container-based agent"""
         if not self.docker_client:
-            return {"success": False, "error": "Docker daemon not available"}
+            return {"success": False, "error": "Docker daemon not available for container deployment"}
         
         try:
-            # Get agent template from config
-            templates = self.config.get('agent_templates', {})
+            # Get template from config
+            templates = self.config.get('container_agent_templates', {})
             if agent_type not in templates:
-                return {"success": False, "error": f"Unknown agent type: {agent_type}"}
+                return {"success": False, "error": f"Container template not found for: {agent_type}"}
             
             template = templates[agent_type]
             
@@ -905,11 +954,54 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
                 errors=[]
             )
             
-            self.logger.info(f"✅ Deployed {agent_type} agent: {name}")
-            return {"success": True, "container_id": container.id, "name": name}
+            self.logger.info(f"✅ Deployed {agent_type} container agent: {name}")
+            return {"success": True, "container_id": container.id, "name": name, "type": "container"}
             
         except Exception as e:
-            self.logger.error(f"Failed to deploy {agent_type} agent: {e}")
+            self.logger.error(f"Failed to deploy {agent_type} container agent: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def _deploy_non_container_agent(self, agent_type: str, agent_info: Dict[str, Any], team: str = None, name: str = None) -> Dict[str, Any]:
+        """Deploy a non-container agent (like enhanced_discord_agent.py)"""
+        try:
+            # Get template from config  
+            templates = self.config.get('non_container_agents', {})
+            if agent_type not in templates:
+                return {"success": False, "error": f"Non-container template not found for: {agent_type}"}
+            
+            template = templates[agent_type]
+            
+            # Generate unique process name
+            if not name:
+                name = f"{agent_type}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            
+            # Get script path
+            script = template.get('script', 'enhanced_discord_agent.py')
+            script_path = Path(__file__).parent.parent / script
+            
+            if not script_path.exists():
+                return {"success": False, "error": f"Agent script not found: {script_path}"}
+            
+            # Prepare environment variables
+            env_vars = template.get('environment', {}).copy()
+            for key, value in env_vars.items():
+                if value.startswith('${') and value.endswith('}'):
+                    env_name = value[2:-1]
+                    env_vars[key] = os.getenv(env_name, value)
+            
+            # Note: For now, return success but indicate manual deployment needed
+            # In a full implementation, you'd use subprocess to start the script
+            self.logger.info(f"✅ Non-container agent {agent_type} ready for deployment")
+            return {
+                "success": True, 
+                "name": name, 
+                "type": "non_container",
+                "script": str(script_path),
+                "note": f"Manual deployment required: Run 'python {script_path}' with config key '{template.get('config_key', agent_type)}'"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to prepare {agent_type} non-container agent: {e}")
             return {"success": False, "error": str(e)}
     
     async def stop_agent(self, agent_name: str) -> Dict[str, Any]:
