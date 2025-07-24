@@ -105,6 +105,10 @@ class MCPDevOpsAgent:
         self.processed_messages = set()
         self.last_response_time = {}
         
+        # Cache for dynamic agent discovery (initialize before system knowledge)
+        self._agent_types_cache = None
+        self._cache_timestamp = None
+        
         # MCP Discord configuration
         self.mcp_command, self.mcp_args = self._load_mcp_config()
         
@@ -238,6 +242,98 @@ class MCPDevOpsAgent:
         
         self.logger.info("Memory database initialized")
     
+    def _get_available_agent_types(self) -> Dict[str, Dict[str, Any]]:
+        """Dynamically discover available agent types from configuration files"""
+        # Cache for 5 minutes to avoid constant file reads
+        if (self._agent_types_cache and self._cache_timestamp and 
+            (datetime.now() - self._cache_timestamp).seconds < 300):
+            return self._agent_types_cache
+        
+        available_types = {}
+        
+        # 1. Load from DevOps config (agent_templates)
+        devops_templates = self.config.get('agent_templates', {})
+        for agent_type, template in devops_templates.items():
+            available_types[agent_type] = {
+                'source': 'devops_config',
+                'image': template.get('image', 'unknown'),
+                'capabilities': template.get('capabilities', []),
+                'personality': template.get('environment', {}).get('AGENT_PERSONALITY', 'General AI assistant'),
+                'labels': template.get('labels', {}),
+                'deployable': True
+            }
+        
+        # 2. Load from main agent config (for reference)
+        try:
+            agent_config_path = Path(__file__).parent.parent / "agent_config.json"
+            if agent_config_path.exists():
+                with open(agent_config_path, 'r') as f:
+                    agent_config = json.load(f)
+                    
+                agents = agent_config.get('agents', {})
+                for agent_key, agent_data in agents.items():
+                    # Extract agent type from key (e.g., "grok4_agent" -> "grok4") 
+                    agent_type = agent_key.replace('_agent', '')
+                    
+                    if agent_type not in available_types:
+                        available_types[agent_type] = {
+                            'source': 'agent_config',
+                            'image': 'N/A - Config only',
+                            'capabilities': [],
+                            'personality': agent_data.get('personality', ''),
+                            'llm_type': agent_data.get('llm_type', 'unknown'),
+                            'deployable': False  # Config only, no deployment template
+                        }
+                    else:
+                        # Merge additional info
+                        available_types[agent_type]['llm_type'] = agent_data.get('llm_type', 'unknown')
+                        if not available_types[agent_type]['personality']:
+                            available_types[agent_type]['personality'] = agent_data.get('personality', '')
+        except Exception as e:
+            self.logger.debug(f"Could not load agent_config.json: {e}")
+        
+        # 3. Check available Docker images
+        if self.docker_client:
+            try:
+                images = self.docker_client.images.list()
+                superagent_images = [img for img in images 
+                                   if any('superagent' in tag for tag in img.tags or [])]
+                
+                for agent_type in available_types:
+                    # Check if there's a suitable image available
+                    template = devops_templates.get(agent_type, {})
+                    required_image = template.get('image', '')
+                    
+                    image_available = any(required_image in (tag for tag in img.tags or []) 
+                                        for img in images)
+                    available_types[agent_type]['image_available'] = image_available
+                    
+            except Exception as e:
+                self.logger.debug(f"Could not check Docker images: {e}")
+        
+        # Update cache
+        self._agent_types_cache = available_types
+        self._cache_timestamp = datetime.now()
+        
+        return available_types
+    
+    def _get_available_agent_types_description(self) -> str:
+        """Generate description of available agent types"""
+        agent_types = self._get_available_agent_types()
+        
+        if not agent_types:
+            return "- No agent types currently configured"
+        
+        descriptions = []
+        for agent_type, info in agent_types.items():
+            status = "✅" if info.get('deployable', False) else "⚠️"
+            capabilities = ", ".join(info.get('capabilities', [])) or "general"
+            personality = info.get('personality', 'AI assistant')
+            
+            descriptions.append(f"- {status} **{agent_type}**: {personality} ({capabilities})")
+        
+        return "\n".join(descriptions)
+    
     def _build_system_knowledge(self) -> str:
         """Build system knowledge base for Claude"""
         return f"""
@@ -252,11 +348,7 @@ SYSTEM ARCHITECTURE:
 - Each agent has unique Discord identity and specialized capabilities
 
 AVAILABLE AGENT TYPES:
-- grok4: Research and analysis expert
-- claude: Code development and writing
-- gemini: Creative tasks and multimodal analysis
-- manager: Team coordination and task assignment
-- fullstack: Full-stack development specialist
+{self._get_available_agent_types_description()}
 
 CONTAINER MANAGEMENT:
 - All agents run in isolated Docker containers
@@ -324,11 +416,15 @@ COMMAND PATTERNS:
         try:
             content = message_data.get('content', '').lower()
             
+            # Get available agent types dynamically
+            available_agents = self._get_available_agent_types()
+            available_agent_names = list(available_agents.keys())
+            
             # Check for direct commands first
-            if 'deploy' in content and any(agent_type in content for agent_type in ['grok4', 'claude', 'gemini', 'manager', 'fullstack']):
+            if 'deploy' in content and any(agent_type in content for agent_type in available_agent_names):
                 # Extract agent type
                 agent_type = None
-                for atype in ['grok4', 'claude', 'gemini', 'manager', 'fullstack']:
+                for atype in available_agent_names:
                     if atype in content:
                         agent_type = atype
                         break
@@ -347,13 +443,8 @@ COMMAND PATTERNS:
                 return await self._get_real_system_status()
             
             elif 'available' in content and 'agent' in content:
-                # List actual available agent types from config
-                agent_templates = list(self.config.get('agent_templates', {}).keys())
-                descriptions = []
-                for agent in agent_templates:
-                    desc = self._get_agent_description(agent)
-                    descriptions.append(f"• **{agent}** - {desc}")
-                return f"🤖 **Available Agent Types:**\n" + "\n".join(descriptions)
+                # List actual available agent types from dynamic discovery
+                return f"🤖 **Available Agent Types:**\n{self._get_available_agent_types_description()}"
             
             elif 'logs' in content and ('agent' in content or 'container' in content):
                 return "To view logs, please specify the exact agent name: `show logs for agent-name`"
@@ -362,7 +453,8 @@ COMMAND PATTERNS:
             system_state = await self._get_current_system_state()
             
             # Use Claude with proper system context and strict instructions  
-            agent_templates = list(self.config.get('agent_templates', {}).keys())
+            deployable_agents = [name for name, info in available_agents.items() if info.get('deployable', False)]
+            all_agent_names = list(available_agents.keys())
             
             response = await self.claude.messages.create(
                 model=self.config['claude_model'],
@@ -371,12 +463,13 @@ COMMAND PATTERNS:
                     "role": "user", 
                     "content": f"""You are the SuperAgent DevOps Agent managing a multi-agent Discord system.
 
-AVAILABLE AGENT TYPES: {', '.join(agent_templates)}
+AVAILABLE AGENT TYPES: {', '.join(all_agent_names)}
+DEPLOYABLE AGENTS: {', '.join(deployable_agents)}
 CURRENT SYSTEM: CPU {system_state['system']['cpu_percent']:.1f}%, Memory {system_state['system']['memory_percent']:.1f}%, {len(system_state['agents'])} active agents
 DOCKER STATUS: {"Connected" if self.docker_client else "Not available"}
 
 COMMANDS YOU CAN EXECUTE:
-- deploy [grok4|claude|gemini|manager|fullstack] agent
+- deploy [{'/'.join(deployable_agents)}] agent
 - list active agents  
 - stop agent [name]
 - show system status
@@ -384,8 +477,9 @@ COMMANDS YOU CAN EXECUTE:
 
 User {message_data.get('username')} asks: "{message_data.get('content', '')}"
 
-If they ask about deployable agents, list the actual types: {', '.join(agent_templates)}.
-If they ask to deploy something, either execute it or explain what you need.
+If they ask about deployable agents, list the actual types: {', '.join(deployable_agents)}.
+If they ask about all agents, include config-only ones: {', '.join(all_agent_names)}.
+If they ask to deploy something, only deploy from deployable list.
 If they ask about containers, explain you manage Docker containers for the agent types above.
 
 Respond with ONLY your final Discord message. No thinking or analysis. Be helpful and accurate about what you actually can do."""
@@ -976,7 +1070,7 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
 • Managed Agents: {running_agents}
 • Agent Registry: {len(self.agents)} tracked
 
-**Available Agent Types:** {', '.join(self.config.get('agent_templates', {}).keys())}"""
+**Available Agent Types:** {', '.join(self._get_available_agent_types().keys())}"""
             
             return status_msg
             
@@ -984,14 +1078,16 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
             return f"❌ Error getting system status: {str(e)}"
     
     def _get_agent_description(self, agent_type: str) -> str:
-        """Get description for agent type from config"""
-        templates = self.config.get('agent_templates', {})
-        if agent_type in templates:
-            personality = templates[agent_type].get('environment', {}).get('AGENT_PERSONALITY', '')
-            if personality:
-                return personality
+        """Get description for an agent type from actual configuration"""
+        agent_types = self._get_available_agent_types()
+        
+        if agent_type in agent_types:
+            info = agent_types[agent_type]
+            capabilities = ", ".join(info.get('capabilities', [])) or "general tasks"
+            personality = info.get('personality', 'AI assistant')
+            return f"{personality} - Specializes in {capabilities}"
             
-        # OBVIOUSLY FAKE fallbacks so we know when it's broken
+        # OBVIOUSLY FAKE fallbacks so we know when discovery is broken
         fake_descriptions = {
             'grok4': '🦄 FAKE: Unicorn-powered rainbow generator',
             'claude': '🤖 FAKE: Sentient toaster with PhD in philosophy', 
