@@ -118,10 +118,10 @@ class DetailDashboard:
             header_text.append(" | ", style="dim")
             header_text.append(f"Detail: {self.detail_mode.title()}", style="bold yellow")
             header_text.append(" | ", style="dim")
-            header_text.append("0=Back", style="cyan")
+            header_text.append("0=Back C=Commands", style="cyan")
         else:
             header_text.append(" | ", style="dim")
-            header_text.append("1=Agents 2=Teams 3=Configs 4=System 5=Postgres 6=Logs 0=Back Q=Quit", style="cyan")
+            header_text.append("1=Agents 2=Teams 3=Configs 4=System 5=Postgres 6=Logs 7=Manage C=Commands Q=Quit", style="cyan")
         
         return Panel(
             Align.center(header_text),
@@ -247,7 +247,7 @@ class DetailDashboard:
             key_map = {
                 "grok4": "XAI_API_KEY",
                 "claude": "ANTHROPIC_API_KEY", 
-                "gemini": "GOOGLE_AI_API_KEY",
+                "gemini": "GEMINI_API_KEY",
                 "openai": "OPENAI_API_KEY"
             }
             
@@ -475,6 +475,144 @@ class DetailDashboard:
             box=DOUBLE
         )
     
+    def create_management_detail(self) -> Panel:
+        """Create agent/team management view"""
+        content = Text()
+        
+        # Current system status
+        content.append("🎛️  SUPERAGENT MANAGEMENT CENTER\n", style="bold cyan")
+        content.append("═" * 50 + "\n\n", style="dim")
+        
+        # Running agents status
+        agents = self.get_agent_processes()
+        content.append("📊 CURRENT STATUS:\n", style="bold")
+        content.append(f"   Active Agents: {len(agents)}\n", style="green")
+        for name, info in agents.items():
+            uptime = f"{info['uptime']/60:.1f}m" if info['uptime'] < 3600 else f"{info['uptime']/3600:.1f}h"
+            content.append(f"   • {name}: PID {info['pid']} ({uptime})\n", style="white")
+        
+        content.append("\n")
+        
+        # Team status
+        teams = self.agent_config_data.get('teams', {})
+        content.append("👥 TEAMS OVERVIEW:\n", style="bold")
+        for team_name, team_info in teams.items():
+            auto_deploy = "🟢 Auto" if team_info.get('auto_deploy') else "🔴 Manual"
+            agents_list = ", ".join(team_info.get('agents', []))
+            content.append(f"   • {team_name}: {auto_deploy} | Agents: {agents_list}\n", style="white")
+        
+        content.append("\n")
+        
+        # Missing components
+        content.append("⚠️  MISSING COMPONENTS:\n", style="bold yellow")
+        
+        # Check for DevOps agent
+        devops_running = any('devops' in name.lower() for name in agents.keys())
+        if not devops_running:
+            content.append("   ❌ DevOps Agent (required for management)\n", style="red")
+        else:
+            content.append("   ✅ DevOps Agent is running\n", style="green")
+        
+        # Check API keys
+        api_keys = {
+            "XAI_API_KEY": "Grok4",
+            "ANTHROPIC_API_KEY": "Claude", 
+            "GEMINI_API_KEY": "Gemini",
+            "OPENAI_API_KEY": "OpenAI"
+        }
+        
+        missing_keys = []
+        for env_var, name in api_keys.items():
+            if not os.getenv(env_var):
+                missing_keys.append(f"{name} ({env_var})")
+        
+        if missing_keys:
+            content.append(f"   ❌ Missing API Keys: {', '.join(missing_keys)}\n", style="red")
+        else:
+            content.append("   ✅ All API Keys configured\n", style="green")
+        
+        content.append("\n")
+        
+        # Quick actions
+        content.append("🚀 QUICK ACTIONS:\n", style="bold")
+        content.append("   Press 'C' for command interface\n", style="cyan")
+        content.append("   Available commands:\n", style="white")
+        content.append("   • deploy <agent_type>    - Start an agent\n", style="dim")
+        content.append("   • stop <agent_type>      - Stop an agent\n", style="dim")
+        content.append("   • team deploy <team>     - Deploy entire team\n", style="dim")
+        content.append("   • team stop <team>       - Stop entire team\n", style="dim")
+        content.append("   • status                 - Show detailed status\n", style="dim")
+        content.append("   • logs <agent>           - View agent logs\n", style="dim")
+        
+        content.append("\n")
+        content.append("💡 TIP: DevOps agent provides web UI and API management\n", style="dim")
+        content.append("    Start with: python control_plane/mcp_devops_agent.py\n", style="dim")
+        
+        return Panel(
+            content,
+            title="[bold green]🎛️ SuperAgent Management Center[/bold green]",
+            border_style="green",
+            box=DOUBLE
+        )
+    
+    def create_commands_detail(self) -> Panel:
+        """Create interactive commands view"""
+        content = Text()
+        
+        content.append("💻 SUPERAGENT COMMAND CENTER\n", style="bold cyan")
+        content.append("═" * 50 + "\n\n", style="dim")
+        
+        content.append("📋 AVAILABLE COMMANDS:\n\n", style="bold")
+        
+        # Agent Management
+        content.append("🤖 AGENT MANAGEMENT:\n", style="bold green")
+        content.append("   deploy grok4_agent       - Deploy Grok4 agent\n", style="white")
+        content.append("   deploy claude_agent      - Deploy Claude agent\n", style="white") 
+        content.append("   deploy gemini_agent      - Deploy Gemini agent\n", style="white")
+        content.append("   deploy openai_agent      - Deploy OpenAI agent\n", style="white")
+        content.append("   stop <agent_name>        - Stop specific agent\n", style="white")
+        content.append("   restart <agent_name>     - Restart agent\n", style="white")
+        content.append("   status <agent_name>      - Check agent status\n\n", style="white")
+        
+        # Team Management
+        content.append("👥 TEAM MANAGEMENT:\n", style="bold blue")
+        content.append("   team deploy research     - Deploy research team\n", style="white")
+        content.append("   team deploy creative     - Deploy creative team\n", style="white")
+        content.append("   team deploy dev          - Deploy dev team\n", style="white")
+        content.append("   team stop <team_name>    - Stop entire team\n", style="white")
+        content.append("   team status              - Show all team status\n\n", style="white")
+        
+        # System Management
+        content.append("⚙️ SYSTEM MANAGEMENT:\n", style="bold magenta")
+        content.append("   devops start             - Start DevOps agent\n", style="white")
+        content.append("   devops stop              - Stop DevOps agent\n", style="white")
+        content.append("   system status            - Full system check\n", style="white")
+        content.append("   logs <agent_name>        - View agent logs\n", style="white")
+        content.append("   config reload            - Reload configurations\n\n", style="white")
+        
+        # Database Management  
+        content.append("🗄️ DATABASE MANAGEMENT:\n", style="bold yellow")
+        content.append("   db status                - Check PostgreSQL status\n", style="white")
+        content.append("   db backup                - Create database backup\n", style="white")
+        content.append("   db migrate               - Run database migrations\n\n", style="white")
+        
+        # Environment
+        content.append("🔧 ENVIRONMENT:\n", style="bold red")
+        content.append("   env check                - Validate all environment variables\n", style="white")
+        content.append("   env list                 - List all configurations\n", style="white")
+        content.append("   api-keys check           - Verify all API keys\n\n", style="white")
+        
+        content.append("💡 USAGE: Type commands in the terminal while dashboard runs\n", style="dim")
+        content.append("   Commands are executed via superagent_manager.py\n", style="dim")
+        content.append("   Example: python superagent_manager.py deploy grok4_agent\n", style="dim")
+        
+        return Panel(
+            content,
+            title="[bold cyan]💻 Command Reference Guide[/bold cyan]",
+            border_style="cyan",
+            box=DOUBLE
+        )
+    
     def create_main_layout(self) -> Layout:
         """Create main dashboard layout or detail view"""
         layout = Layout()
@@ -508,6 +646,16 @@ class DetailDashboard:
             layout.split_column(
                 Layout(self.create_header(), size=3),
                 Layout(self.create_logs_detail())
+            )
+        elif self.detail_mode == 'manage':
+            layout.split_column(
+                Layout(self.create_header(), size=3),
+                Layout(self.create_management_detail())
+            )
+        elif self.detail_mode == 'commands':
+            layout.split_column(
+                Layout(self.create_header(), size=3),
+                Layout(self.create_commands_detail())
             )
         else:
             # Import existing dashboard panels
@@ -584,6 +732,10 @@ class DetailDashboard:
                             self.detail_mode = 'postgres'
                         elif key == '6':
                             self.detail_mode = 'logs'
+                        elif key == '7':
+                            self.detail_mode = 'manage'
+                        elif key == 'c':
+                            self.detail_mode = 'commands'
                         
                     except queue.Empty:
                         pass

@@ -625,21 +625,21 @@ def load_agent_config(config_key: str = "grok4_agent") -> AgentConfig:
                 
                 # Map llm_type to appropriate token and API key
                 token_map = {
-                    "grok4": "DISCORD_TOKEN_GROK",
-                    "claude": "DISCORD_TOKEN2", 
-                    "gemini": "DISCORD_TOKEN3",
-                    "openai": "DISCORD_TOKEN4"
+                    "grok4": "DISCORD_TOKEN_GROK4",
+                    "claude": "DISCORD_TOKEN_CLAUDE", 
+                    "gemini": "DISCORD_TOKEN_GEMINI",
+                    "openai": "DISCORD_TOKEN_OPENAI"
                 }
                 
                 api_key_map = {
                     "grok4": "XAI_API_KEY",
                     "claude": "ANTHROPIC_API_KEY",
-                    "gemini": "GOOGLE_AI_API_KEY", 
+                    "gemini": "GEMINI_API_KEY", 
                     "openai": "OPENAI_API_KEY"
                 }
                 
                 llm_type = agent_config.get('llm_type', 'grok4')
-                token_env = token_map.get(llm_type, "DISCORD_TOKEN_GROK")
+                token_env = token_map.get(llm_type, "DISCORD_TOKEN_GROK4")
                 api_key_env = api_key_map.get(llm_type, "XAI_API_KEY")
                 
                 return AgentConfig(
@@ -658,7 +658,7 @@ def load_agent_config(config_key: str = "grok4_agent") -> AgentConfig:
     # Fallback to default Grok4 config
     return AgentConfig(
         name="Grok4Agent",
-        bot_token=os.getenv("DISCORD_TOKEN_GROK", ""),
+        bot_token=os.getenv("DISCORD_TOKEN_GROK4", ""),
         server_id=os.getenv("DEFAULT_SERVER_ID", "1395578178973597799"),
         api_key=os.getenv("XAI_API_KEY", ""),
         llm_type="grok4",
