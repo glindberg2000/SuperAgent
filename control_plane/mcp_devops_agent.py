@@ -1004,28 +1004,40 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
             # Add config key for enhanced_discord_agent.py
             config_key = template.get('config_key', agent_type)
             
-            # Start the process
+            # Start the process with better logging
             self.logger.info(f"Starting non-container agent: {script_path} with config key: {config_key}")
             
+            # Create a log file for this specific agent instance
+            log_dir = Path(__file__).parent.parent / "logs" / "deployed_agents"
+            log_dir.mkdir(exist_ok=True)  
+            log_file = log_dir / f"{name}.log"
+            
             import subprocess
-            process = subprocess.Popen(
-                [str(venv_python), str(script_path), "--config-key", config_key],
-                env=proc_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=str(script_path.parent)
-            )
+            with open(log_file, 'w') as log_handle:
+                process = subprocess.Popen(
+                    [str(venv_python), str(script_path), "--config-key", config_key],
+                    env=proc_env,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,  # Redirect stderr to stdout so we capture all output
+                    cwd=str(script_path.parent)
+                )
             
             # Give it a moment to start
-            import time
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             
             # Check if process is still running
             if process.poll() is None:
-                # Store process info in registry
+                # Store process info in registry  
                 await self._register_agent(name, agent_type, str(process.pid), "running", template)
                 
                 self.logger.info(f"✅ Non-container agent {agent_type} started successfully (PID: {process.pid})")
+                self.logger.info(f"📋 Agent logs: {log_file}")
+                
+                # Store the process object for monitoring
+                if not hasattr(self, '_deployed_processes'):
+                    self._deployed_processes = {}
+                self._deployed_processes[name] = process
+                
                 return {
                     "success": True,
                     "name": name,
@@ -1033,23 +1045,60 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
                     "script": str(script_path),
                     "pid": process.pid,
                     "status": "running",
-                    "config_key": config_key
+                    "config_key": config_key,
+                    "log_file": str(log_file)
                 }
             else:
-                # Process failed to start
-                stdout, stderr = process.communicate()
-                error_msg = f"Process failed to start. Error: {stderr.decode()}"
-                self.logger.error(error_msg)
+                # Process failed to start - read the log file for errors
+                try:
+                    with open(log_file, 'r') as f:
+                        error_output = f.read()
+                except:
+                    error_output = "Could not read log file"
+                    
+                error_msg = f"Process failed to start. Exit code: {process.returncode}"
+                self.logger.error(f"{error_msg}\nOutput: {error_output}")
                 return {
                     "success": False,
                     "error": error_msg,
-                    "stdout": stdout.decode(),
-                    "stderr": stderr.decode()
+                    "output": error_output,
+                    "log_file": str(log_file)
                 }
             
         except Exception as e:
             self.logger.error(f"Failed to prepare {agent_type} non-container agent: {e}")
             return {"success": False, "error": str(e)}
+    
+    async def check_non_container_agents(self) -> Dict[str, Any]:
+        """Check status of deployed non-container agents"""
+        if not hasattr(self, '_deployed_processes'):
+            return {"active_agents": [], "dead_agents": []}
+        
+        active_agents = []
+        dead_agents = []
+        
+        for name, process in self._deployed_processes.items():
+            if process.poll() is None:
+                # Process is still running
+                active_agents.append({
+                    "name": name,
+                    "pid": process.pid,
+                    "status": "running"
+                })
+            else:
+                # Process has died
+                dead_agents.append({
+                    "name": name,
+                    "pid": process.pid,
+                    "status": "dead",
+                    "exit_code": process.returncode
+                })
+                
+        return {
+            "active_agents": active_agents,
+            "dead_agents": dead_agents,
+            "total_deployed": len(self._deployed_processes)
+        }
     
     async def stop_agent(self, agent_name: str) -> Dict[str, Any]:
         """Stop an agent container"""

@@ -72,9 +72,12 @@ class MemoryClient:
         """Store a memory with its embedding"""
         embedding = self._get_embedding(content)
         
+        # Convert embedding list to PostgreSQL vector format
+        embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+        
         query = """
         INSERT INTO memories (agent_id, content, embedding, metadata)
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3::vector, $4)
         RETURNING id
         """
         
@@ -83,7 +86,7 @@ class MemoryClient:
                 query, 
                 agent_id, 
                 content, 
-                embedding, 
+                embedding_str, 
                 json.dumps(metadata or {})
             )
         
@@ -94,6 +97,9 @@ class MemoryClient:
                             limit: int = 5) -> List[Dict[str, Any]]:
         """Search for similar memories using vector similarity"""
         query_embedding = self._get_embedding(query)
+        
+        # Convert embedding list to PostgreSQL vector format
+        query_embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
         
         sql = """
         SELECT 
@@ -110,7 +116,7 @@ class MemoryClient:
         """
         
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(sql, query_embedding, agent_id, limit)
+            rows = await conn.fetch(sql, query_embedding_str, agent_id, limit)
         
         results = []
         for row in rows:

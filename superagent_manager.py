@@ -265,6 +265,10 @@ def main():
     dashboard_parser = subparsers.add_parser('dashboard', help='Launch CLI dashboard')
     dashboard_parser.add_argument('--refresh', type=float, default=2.0, help='Refresh interval')
     
+    # Interactive dashboard command
+    interactive_parser = subparsers.add_parser('interactive', help='Launch interactive dashboard with real-time commands')
+    interactive_parser.add_argument('--refresh', type=float, default=2.0, help='Refresh interval')
+    
     # Validate command
     validate_parser = subparsers.add_parser('validate', help='Validate agent configuration')
     validate_parser.add_argument('agent_type', choices=['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'])
@@ -359,6 +363,13 @@ def main():
             print("   Press Ctrl+C to exit")
             dashboard = SuperAgentDashboard()
             asyncio.run(dashboard.run(args.refresh))
+            
+        elif args.command == 'interactive':
+            print("🚀 Starting Interactive SuperAgent Dashboard...")
+            print("   Type commands while dashboard runs, Press Ctrl+C to exit")
+            from interactive_dashboard import InteractiveDashboard
+            dashboard = InteractiveDashboard()
+            asyncio.run(dashboard.run_interactive(args.refresh))
     
     except KeyboardInterrupt:
         print("\n👋 Goodbye!")
