@@ -381,12 +381,22 @@ Based on the file content above, provide a helpful analysis of what the file con
 You're participating in a Discord conversation. Be conversational, helpful, and engaging.
 Keep responses concise but informative. Avoid being repetitive or robotic.
 
+IMPORTANT: Do NOT include your name or any prefixes like "{self.config.name}:" in your responses. Just respond naturally as if you're speaking directly to the user.
+
 CAPABILITIES: You have access to file operations - you can download files uploaded by users and analyze their content. When users upload files and ask you to read them, you can download and process the files.{attachment_info}"""
             
             response_content = await self.llm_provider.generate_response(
                 context_messages, 
                 system_prompt
             )
+            
+            # Clean up the response - remove repeated bot name prefixes
+            # Remove patterns like "Grok4Agent: Grok4Agent:" or "BotName: BotName:"
+            import re
+            bot_name = self.config.name
+            # Remove multiple consecutive bot name prefixes 
+            pattern = rf"^({re.escape(bot_name)}:\s*)+"
+            response_content = re.sub(pattern, "", response_content, flags=re.IGNORECASE).strip()
             
             processing_time = time.time() - start_time
             
