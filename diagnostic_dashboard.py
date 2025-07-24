@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 import psutil
+import docker
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -31,6 +32,14 @@ class DiagnosticDashboard:
         self.logs_dir = Path("logs")
         self.config_file = Path("agent_config.json")
         self.agent_config_data = self._load_config_data()
+        self.docker_client = self._init_docker_client()
+        
+    def _init_docker_client(self):
+        """Initialize Docker client with fallback options"""
+        try:
+            return docker.from_env()
+        except Exception:
+            return None
         
     def _load_config_data(self) -> Dict:
         """Load agent configuration data"""
@@ -88,7 +97,8 @@ class DiagnosticDashboard:
                             "pid": proc.info['pid'],
                             "discord_name": discord_name,
                             "uptime": time.time() - proc.info['create_time'],
-                            "status": "running"
+                            "status": "running",
+                            "type": "process"
                         }
                     
                     elif 'mcp_devops_agent.py' in cmdline:
@@ -97,7 +107,8 @@ class DiagnosticDashboard:
                             "pid": proc.info['pid'],
                             "discord_name": discord_name,
                             "uptime": time.time() - proc.info['create_time'],
-                            "status": "running"
+                            "status": "running",
+                            "type": "process"
                         }
                         
                 except (psutil.NoSuchProcess, psutil.AccessDenied, IndexError):
@@ -105,6 +116,62 @@ class DiagnosticDashboard:
         except Exception:
             pass
         return agents
+    
+    def get_container_agents(self) -> Dict[str, Dict]:
+        """Get running container agents"""
+        containers = {}
+        if not self.docker_client:
+            return containers
+            
+        try:
+            for container in self.docker_client.containers.list(all=True):
+                name = container.name
+                labels = container.labels or {}
+                
+                # Check for Claude Code containers
+                if ('claude-code' in container.image.tags[0] if container.image.tags else False) or \
+                   labels.get('superagent.type') == 'claude-code':
+                    
+                    containers[f"container_{name}"] = {
+                        "container_id": container.id[:12],
+                        "discord_name": labels.get('superagent.discord_name', name),
+                        "uptime": time.time() - container.attrs['Created'].timestamp() if container.status == 'running' else 0,
+                        "status": container.status,
+                        "type": "container",
+                        "image": container.image.tags[0] if container.image.tags else 'unknown'
+                    }
+        except Exception:
+            pass
+        return containers
+    
+    def check_postgres_container(self) -> Dict[str, str]:
+        """Check PostgreSQL container status"""
+        if not self.docker_client:
+            return {"status": "❌ Docker not available", "details": "Cannot connect to Docker"}
+            
+        try:
+            # Look for superagent-postgres container
+            containers = self.docker_client.containers.list(all=True, filters={"name": "superagent-postgres"})
+            if containers:
+                container = containers[0]
+                if container.status == 'running':
+                    ports = container.attrs['NetworkSettings']['Ports']
+                    port_info = ""
+                    if '5432/tcp' in ports and ports['5432/tcp']:
+                        port_info = f" (port {ports['5432/tcp'][0]['HostPort']})"
+                    return {
+                        "status": "🟢 Running",
+                        "details": f"Container: {container.name}{port_info}"
+                    }
+                else:
+                    return {
+                        "status": "🔴 Stopped", 
+                        "details": f"Container: {container.name} ({container.status})"
+                    }
+            else:
+                return {"status": "❌ Not Found", "details": "superagent-postgres container not found"}
+        except Exception as e:
+            return {"status": "❌ Error", "details": f"Docker error: {str(e)[:50]}..."}
     
     def check_api_keys(self) -> Dict[str, Dict]:
         """Check all API keys and their validity"""
@@ -220,28 +287,38 @@ class DiagnosticDashboard:
     
     def create_discord_bots_panel(self) -> Panel:
         """Create Discord Bots configuration panel"""
-        table = Table(show_header=True, box=ROUNDED)
-        table.add_column("Discord Bot", style="cyan", width=20)
-        table.add_column("Agent ID", style="blue", width=15)
-        table.add_column("Status", style="green", width=12)
-        table.add_column("Token Env Var", style="yellow", width=20)
-        table.add_column("Token Status", style="magenta", width=12)
-        table.add_column("Running", style="white", width=10)
+        # Use expand=True to use full available width
+        table = Table(show_header=True, box=ROUNDED, expand=True)
+        table.add_column("Discord Bot", style="cyan", min_width=25, ratio=3)
+        table.add_column("Agent ID", style="blue", min_width=15, ratio=2)
+        table.add_column("Token Status", style="green", min_width=12, ratio=2)
+        table.add_column("Token Env Var", style="yellow", min_width=22, ratio=3)
+        table.add_column("Type", style="magenta", min_width=10, ratio=1)
+        table.add_column("Running", style="white", min_width=12, ratio=2)
         
         tokens = self.check_discord_tokens()
         running_agents = self.get_agent_processes()
+        container_agents = self.get_container_agents()
         
         for token_key, token_info in tokens.items():
             agent_id = token_info["agent"]
-            is_running = agent_id in running_agents
+            is_running_process = agent_id in running_agents
+            is_running_container = any(agent_id in key for key in container_agents.keys())
+            is_running = is_running_process or is_running_container
             
             # Get actual Discord name if running
-            if is_running:
+            if is_running_process:
                 actual_name = running_agents[agent_id].get("discord_name", "Unknown")
-                bot_display = f"{token_info['bot_name']}\n({actual_name})"
+                agent_type = "📱 Process"
+            elif is_running_container:
+                container_key = next((k for k in container_agents.keys() if agent_id in k), None)
+                actual_name = container_agents[container_key].get("discord_name", "Unknown") if container_key else "Unknown"
+                agent_type = "🐳 Container" 
             else:
-                bot_display = token_info["bot_name"]
+                actual_name = "N/A"
+                agent_type = "💤 Offline"
             
+            bot_display = f"{token_info['bot_name']}\n[dim]({actual_name})[/dim]" if actual_name != "N/A" else token_info['bot_name']
             running_status = "🟢 Online" if is_running else "🔴 Offline"
             
             table.add_row(
@@ -249,7 +326,7 @@ class DiagnosticDashboard:
                 agent_id,
                 token_info["status"],
                 token_info["env_var"],
-                f"{token_info['length']} chars" if token_info["length"] > 0 else "❌ Missing",
+                agent_type,
                 running_status
             )
         
@@ -262,12 +339,12 @@ class DiagnosticDashboard:
     
     def create_llm_api_panel(self) -> Panel:
         """Create LLM API configuration panel"""
-        table = Table(show_header=True, box=ROUNDED)
-        table.add_column("LLM Provider", style="green", width=20)
-        table.add_column("Used By", style="blue", width=15)
-        table.add_column("API Key Env", style="yellow", width=20)
-        table.add_column("Status", style="magenta", width=12)
-        table.add_column("Key Preview", style="dim", width=30)
+        table = Table(show_header=True, box=ROUNDED, expand=True)
+        table.add_column("LLM Provider", style="green", min_width=20, ratio=3)
+        table.add_column("Used By", style="blue", min_width=15, ratio=2)
+        table.add_column("API Key Env", style="yellow", min_width=22, ratio=3)
+        table.add_column("Status", style="magenta", min_width=12, ratio=2)
+        table.add_column("Key Preview", style="dim", min_width=35, ratio=4)
         
         api_keys = self.check_api_keys()
         
@@ -289,15 +366,17 @@ class DiagnosticDashboard:
     
     def create_agent_status_panel(self) -> Panel:
         """Create detailed agent status panel"""
-        table = Table(show_header=True, box=ROUNDED)
-        table.add_column("Agent", style="cyan", width=15)
-        table.add_column("Discord Bot", style="blue", width=20)
-        table.add_column("LLM", style="green", width=10)
-        table.add_column("Team", style="magenta", width=15)
-        table.add_column("Status", style="yellow", width=12)
-        table.add_column("Uptime", style="white", width=10)
+        table = Table(show_header=True, box=ROUNDED, expand=True)
+        table.add_column("Agent", style="cyan", min_width=15, ratio=2)
+        table.add_column("Discord Bot", style="blue", min_width=25, ratio=3)
+        table.add_column("LLM", style="green", min_width=10, ratio=1)
+        table.add_column("Type", style="yellow", min_width=12, ratio=2)
+        table.add_column("Team", style="magenta", min_width=15, ratio=2)
+        table.add_column("Status", style="white", min_width=12, ratio=2)
+        table.add_column("Uptime", style="dim", min_width=10, ratio=1)
         
         running_agents = self.get_agent_processes()
+        container_agents = self.get_container_agents()
         configs = self.agent_config_data.get("agents", {})
         teams = self.agent_config_data.get("teams", {})
         
@@ -307,7 +386,7 @@ class DiagnosticDashboard:
             for agent_id in team_config.get("agents", []):
                 agent_teams[agent_id] = team_name
         
-        # Show all configured agents
+        # Show all configured agents (processes)
         for agent_id, config in configs.items():
             is_running = agent_id in running_agents
             
@@ -315,16 +394,35 @@ class DiagnosticDashboard:
                 discord_name = running_agents[agent_id].get("discord_name", "Unknown")
                 status = "🟢 Running"
                 uptime = f"{running_agents[agent_id]['uptime']/60:.1f}m"
+                agent_type = "📱 Process"
             else:
                 discord_name = "N/A"
                 status = "🔴 Offline"
                 uptime = "N/A"
+                agent_type = "💤 Offline"
             
             table.add_row(
                 agent_id,
                 discord_name,
                 config.get("llm_type", "unknown"),
+                agent_type,
                 agent_teams.get(agent_id, "None"),
+                status,
+                uptime
+            )
+        
+        # Show container agents
+        for container_key, container_info in container_agents.items():
+            agent_name = container_key.replace('container_', '')
+            status = "🟢 Running" if container_info['status'] == 'running' else f"🔴 {container_info['status']}"
+            uptime = f"{container_info['uptime']/60:.1f}m" if container_info['uptime'] > 0 else "N/A"
+            
+            table.add_row(
+                agent_name,
+                container_info.get('discord_name', 'Unknown'),
+                "claude-code",
+                "🐳 Container",
+                "None",
                 status,
                 uptime
             )
@@ -374,6 +472,30 @@ class DiagnosticDashboard:
             box=DOUBLE
         )
     
+    def create_infrastructure_panel(self) -> Panel:
+        """Create infrastructure services panel"""
+        table = Table(show_header=True, box=ROUNDED, expand=True)
+        table.add_column("Service", style="cyan", min_width=20, ratio=2)
+        table.add_column("Type", style="blue", min_width=15, ratio=2)
+        table.add_column("Status", style="green", min_width=15, ratio=2)
+        table.add_column("Details", style="yellow", min_width=40, ratio=4)
+        
+        # PostgreSQL Container
+        postgres_info = self.check_postgres_container()
+        table.add_row(
+            "PostgreSQL",
+            "🐳 Container",
+            postgres_info["status"],
+            postgres_info["details"]
+        )
+        
+        return Panel(
+            table,
+            title="[bold blue]🏗️ Infrastructure Services[/bold blue]",
+            border_style="blue",
+            box=DOUBLE
+        )
+    
     def create_layout(self) -> Layout:
         """Create the dashboard layout"""
         layout = Layout()
@@ -381,13 +503,15 @@ class DiagnosticDashboard:
         layout.split_column(
             Layout(name="discord", size=10),
             Layout(name="api", size=8),
-            Layout(name="status", size=10),
-            Layout(name="errors", size=12)
+            Layout(name="status", size=12),
+            Layout(name="infrastructure", size=6),
+            Layout(name="errors", size=10)
         )
         
         layout["discord"].update(self.create_discord_bots_panel())
         layout["api"].update(self.create_llm_api_panel())
         layout["status"].update(self.create_agent_status_panel())
+        layout["infrastructure"].update(self.create_infrastructure_panel())
         layout["errors"].update(self.create_error_diagnostics_panel())
         
         return layout
@@ -403,6 +527,7 @@ class DiagnosticDashboard:
                     layout["discord"].update(self.create_discord_bots_panel())
                     layout["api"].update(self.create_llm_api_panel())
                     layout["status"].update(self.create_agent_status_panel())
+                    layout["infrastructure"].update(self.create_infrastructure_panel())
                     layout["errors"].update(self.create_error_diagnostics_panel())
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Dashboard stopped[/yellow]")
