@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "discord": {
+      "transport": "http",
+      "url": "http://discord-mcp-http:8000/mcp",
+      "headers": {
+        "Authorization": "Bot "YOUR_TOKEN_HERE""
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "discord-coderdev1": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/node/mcp-discord",
+        "run",
+        "mcp-discord",
+        "--token",
+        ""YOUR_TOKEN_HERE"",
+        "--server-id",
+        "1395578178973597799"
+      ],
+      "env": {}
+    }
+  }
+}

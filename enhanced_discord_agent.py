@@ -8,7 +8,6 @@ import asyncio
 import json
 import pathlib
 import logging
-import sqlite3
 import os
 import time
 from datetime import datetime, timedelta
@@ -19,6 +18,7 @@ from mcp.client.stdio import stdio_client
 import re
 from dotenv import load_dotenv
 from llm_providers import create_llm_provider, LLMProvider
+from memory_client import MemoryClient
 
 # Load environment variables
 load_dotenv()
@@ -49,159 +49,84 @@ class AgentConfig:
     ignore_bots: bool = True
     bot_allowlist: List[str] = None
 
-class MemoryManager:
-    """Handles conversation memory and context using SQLite"""
+class MemoryManagerWrapper:
+    """Wrapper to make PostgreSQL MemoryClient compatible with existing MemoryManager API"""
     
-    def __init__(self, db_path: str = "data/agent_memory.db"):
-        self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.init_db()
-    
-    def init_db(self):
-        """Initialize SQLite database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+    def __init__(self, memory_client: MemoryClient):
+        self.client = memory_client
+        self.conversation_stats = {}  # Simple in-memory tracking for compatibility
         
-        # Messages table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT UNIQUE,
-                channel_id TEXT,
-                thread_id TEXT,
-                author_id TEXT,
-                author_name TEXT,
-                content TEXT,
-                timestamp DATETIME,
-                is_bot BOOLEAN,
-                agent_name TEXT
-            )
-        ''')
-        
-        # Conversations table for thread tracking
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                thread_id TEXT UNIQUE,
-                channel_id TEXT,
-                title TEXT,
-                participant_count INTEGER,
-                message_count INTEGER,
-                last_activity DATETIME,
-                agent_turn_count INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # Agent responses for audit trail
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS agent_responses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT,
-                agent_name TEXT,
-                llm_type TEXT,
-                prompt_context TEXT,
-                response_content TEXT,
-                timestamp DATETIME,
-                processing_time FLOAT
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
     def store_message(self, message_data: Dict[str, Any]):
         """Store a Discord message"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO messages 
-            (message_id, channel_id, thread_id, author_id, author_name, content, timestamp, is_bot, agent_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            message_data['id'],
-            message_data['channel_id'],
-            message_data.get('thread_id'),
-            message_data['author_id'],
-            message_data['author_name'],
-            message_data['content'],
-            message_data['timestamp'],
-            message_data['is_bot'],
-            message_data.get('agent_name')
-        ))
-        
-        conn.commit()
-        conn.close()
+        try:
+            # Convert to memory format and store
+            content = f"{message_data['author_name']}: {message_data['content']}"
+            # Run async method synchronously
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    self.client.store_memory(
+                        agent_id=message_data.get('agent_name', 'discord'),
+                        content=content,
+                        metadata={
+                            'message_id': message_data['id'],
+                            'channel_id': message_data['channel_id'],
+                            'thread_id': message_data.get('thread_id'),
+                            'author_id': message_data['author_id'],
+                            'author_name': message_data['author_name'],
+                            'timestamp': str(message_data['timestamp']),
+                            'is_bot': message_data['is_bot']
+                        }
+                    )
+                )
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning(f"Failed to store message in PostgreSQL: {e}")
     
     def get_context_messages(self, channel_id: str, thread_id: str = None, limit: int = 20) -> List[Dict]:
-        """Get recent messages for context"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if thread_id:
-            cursor.execute('''
-                SELECT author_name, content, timestamp, is_bot, agent_name
-                FROM messages 
-                WHERE thread_id = ? 
-                ORDER BY timestamp DESC 
-                LIMIT ?
-            ''', (thread_id, limit))
-        else:
-            cursor.execute('''
-                SELECT author_name, content, timestamp, is_bot, agent_name
-                FROM messages 
-                WHERE channel_id = ? AND thread_id IS NULL
-                ORDER BY timestamp DESC 
-                LIMIT ?
-            ''', (channel_id, limit))
-        
-        messages = cursor.fetchall()
-        conn.close()
-        
-        # Convert to dict and reverse to chronological order
-        return [{
-            'author': msg[0],
-            'content': msg[1],
-            'timestamp': msg[2],
-            'is_bot': bool(msg[3]),
-            'agent_name': msg[4]
-        } for msg in reversed(messages)]
+        """Get recent messages for context - simplified for now"""
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                memories = loop.run_until_complete(
+                    self.client.get_recent_memories(limit=limit)
+                )
+                # Convert back to expected format
+                context_messages = []
+                for memory in memories[-limit:]:  # Get recent ones
+                    # Parse the content format "author: message"
+                    content = memory.get('content', '')
+                    if ': ' in content:
+                        author, message = content.split(': ', 1)
+                        context_messages.append({
+                            'author': author,
+                            'content': message,
+                            'timestamp': memory.get('created_at'),
+                            'is_bot': author.endswith('Agent') or 'bot' in author.lower(),
+                            'agent_name': None
+                        })
+                return context_messages
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning(f"Failed to get context from PostgreSQL: {e}")
+            return []
     
     def update_conversation_stats(self, thread_id: str, channel_id: str, increment_agent_turns: bool = False):
-        """Update conversation statistics"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        """Update conversation statistics - simplified tracking"""
+        key = f"{thread_id or channel_id}"
+        if key not in self.conversation_stats:
+            self.conversation_stats[key] = 0
         
-        # Get current stats
-        cursor.execute('SELECT agent_turn_count FROM conversations WHERE thread_id = ?', (thread_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            # Update existing
-            new_agent_turns = result[0] + (1 if increment_agent_turns else 0)
-            cursor.execute('''
-                UPDATE conversations 
-                SET last_activity = ?, agent_turn_count = ?
-                WHERE thread_id = ?
-            ''', (datetime.now(), new_agent_turns, thread_id))
-        else:
-            # Create new
-            cursor.execute('''
-                INSERT INTO conversations 
-                (thread_id, channel_id, last_activity, agent_turn_count)
-                VALUES (?, ?, ?, ?)
-            ''', (thread_id, channel_id, datetime.now(), 1 if increment_agent_turns else 0))
-        
-        conn.commit()
-        conn.close()
-        
-        # Return current agent turn count
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT agent_turn_count FROM conversations WHERE thread_id = ?', (thread_id,))
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else 0
+        if increment_agent_turns:
+            self.conversation_stats[key] += 1
+            
+        return self.conversation_stats[key]
 
 # LLMProvider classes are now in llm_providers.py
 
@@ -210,17 +135,22 @@ class EnhancedDiscordAgent:
     
     def __init__(self, config: AgentConfig):
         self.config = config
-        self.memory = MemoryManager()
+        # Initialize PostgreSQL memory client with wrapper
+        postgres_url = os.getenv('POSTGRES_URL', 'postgresql://superagent:superagent@localhost:5433/superagent')
+        memory_client = MemoryClient(postgres_url)
+        self.memory = MemoryManagerWrapper(memory_client)
         self.llm_provider = self._create_llm_provider()
         
-        # Load MCP configuration
-        mcp_config_path = pathlib.Path(__file__).parent / "mcp.json"
-        with open(mcp_config_path, "r") as f:
-            mcp_config = json.load(f)
+        # Configure MCP to use local mcp-discord with agent-specific token
+        self.mcp_command = "python"
+        self.mcp_args = [
+            str(pathlib.Path(__file__).parent / "mcp-discord" / "src" / "discord_mcp" / "server.py"),
+            "--token", config.bot_token,
+            "--server-id", config.server_id
+        ]
         
-        discord_config = mcp_config.get("mcpServers", {}).get("discord-grok", {})
-        self.mcp_command = discord_config.get("command", "uv")
-        self.mcp_args = discord_config.get("args", [])
+        # Include environment variables for the MCP process
+        self.mcp_env = dict(os.environ)
         
         # Set up logging directory
         os.makedirs(f"logs/{config.name}", exist_ok=True)
@@ -255,6 +185,17 @@ class EnhancedDiscordAgent:
         channel_id = message_data['channel_id']
         if self.config.allowed_channels and channel_id not in self.config.allowed_channels:
             return False, "channel not allowed"
+        
+        # Check if message mentions this bot (to prevent responding to everything)
+        content = message_data.get('content', '')
+        bot_mention = f"<@{os.getenv('DISCORD_BOT_USER_ID', '1396750004588253205')}>"  # Bot's user ID
+        
+        # Only respond if mentioned, unless it's a DM or special channel
+        if bot_mention not in content and not channel_id.startswith('DM'):
+            # Allow responses in certain channels or if configured to respond to all
+            respond_to_all = getattr(self.config, 'respond_to_all', False)
+            if not respond_to_all:
+                return False, "not mentioned"
         
         # Check max turns per thread
         thread_id = message_data.get('thread_id', channel_id)
@@ -434,24 +375,22 @@ CAPABILITIES: You have access to file operations - you can download files upload
                     increment_agent_turns=True
                 )
                 
-                # Store audit log
-                conn = sqlite3.connect(self.memory.db_path)
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO agent_responses 
-                    (message_id, agent_name, llm_type, prompt_context, response_content, timestamp, processing_time)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    message_data['id'],
-                    self.config.name,
-                    self.config.llm_type,
-                    json.dumps([msg['content'] for msg in context_messages[-5:]]),  # Last 5 messages
-                    response_content,
-                    datetime.now(),
-                    processing_time
-                ))
-                conn.commit()
-                conn.close()
+                # Store audit log in PostgreSQL via memory system
+                try:
+                    audit_content = f"AUDIT: {self.config.name} responded ({processing_time:.2f}s) to: {message_data['content'][:100]}..."
+                    self.memory.store_message({
+                        'id': f"audit_{int(time.time())}",
+                        'channel_id': channel_id,
+                        'thread_id': thread_id,
+                        'author_id': 'system',
+                        'author_name': 'AUDIT',
+                        'content': audit_content,
+                        'timestamp': datetime.now(),
+                        'is_bot': True,
+                        'agent_name': self.config.name
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to store audit log: {e}")
             
         except Exception as e:
             logger.error(f"Error processing message: {e}")
@@ -649,10 +588,11 @@ CAPABILITIES: You have access to file operations - you can download files upload
     
     async def run(self):
         """Main run method"""
-        # Create server parameters
+        # Create server parameters with environment
         server_params = StdioServerParameters(
             command=self.mcp_command,
-            args=self.mcp_args
+            args=self.mcp_args,
+            env=self.mcp_env
         )
         
         logger.info(f"Starting {self.config.name} Discord agent...")

@@ -50,6 +50,35 @@
       "system_prompt_additions": "You excel at step-by-step reasoning, mathematical analysis, and logical problem-solving. Use clear, structured thinking."
     }
   },
+  "teams": {
+    "research_team": {
+      "name": "Research Team",
+      "description": "AI research and analysis specialists",
+      "agents": ["grok4_agent", "claude_agent"],
+      "default_server_id": "1395578178973597799",
+      "gm_channel": "1395578179531309089",
+      "auto_deploy": true,
+      "coordination_mode": "sequential"
+    },
+    "creative_team": {
+      "name": "Creative Team", 
+      "description": "Creative and collaborative specialists",
+      "agents": ["gemini_agent", "o3_agent"],
+      "default_server_id": "1395578178973597799",
+      "gm_channel": "1395578179531309089",
+      "auto_deploy": false,
+      "coordination_mode": "parallel"
+    },
+    "dev_team": {
+      "name": "Development Team",
+      "description": "Code analysis and development specialists",
+      "agents": ["claude_agent", "o3_agent"],
+      "default_server_id": "1395578178973597799", 
+      "gm_channel": "1395578179531309089",
+      "auto_deploy": false,
+      "coordination_mode": "collaborative"
+    }
+  },
   "global_settings": {
     "db_path": "data/agent_memory.db",
     "log_directory": "logs",

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "discord-coder1": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "-m",
+        "discord_mcp",
+        "--token",
+        ""YOUR_TOKEN_HERE"",
+        "--server-id",
+        "1395578178973597799"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/node/mcp-discord/src"
+      }
+    }
+  }
+}
