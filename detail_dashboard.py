@@ -48,11 +48,22 @@ class DetailDashboard:
         self.config_file = Path("agent_config.json")
         self.agent_config_data = self._load_config_data()
         
-        # Initialize Docker client
+        # Initialize Docker client with multiple fallback options
+        self.docker_client = None
+        
+        # Try Colima socket first (seems to be working on this system)
         try:
-            self.docker_client = docker.from_env()
+            self.docker_client = docker.DockerClient(base_url='unix:///Users/greg/.colima/default/docker.sock')
         except Exception:
-            self.docker_client = None
+            # Try Docker Desktop environment
+            try:
+                self.docker_client = docker.from_env()
+            except Exception:
+                # Try standard docker socket
+                try:
+                    self.docker_client = docker.DockerClient(base_url='unix:///var/run/docker.sock')
+                except Exception:
+                    pass
     
     def _load_config_data(self) -> Dict:
         """Load agent configuration data"""
@@ -192,7 +203,7 @@ class DetailDashboard:
             header_text.append("0=Back C=Commands", style="cyan")
         else:
             header_text.append(" | ", style="dim")
-            header_text.append("1=Agents 2=Teams 3=Configs 4=System 5=Postgres 6=Logs 7=Manage C=Commands Q=Quit", style="cyan")
+            header_text.append("1=Agents 2=Teams 3=Configs 4=System 5=Postgres 6=Logs 7=Manage 8=Containers C=Commands Q=Quit", style="cyan")
         
         return Panel(
             Align.center(header_text),
@@ -308,16 +319,16 @@ class DetailDashboard:
             content.append("Expected file: agent_config.json\n", style="yellow")
             content.append("Please check configuration file", style="cyan")
         else:
-            table = Table(show_header=True, box=ROUNDED)
-            table.add_column("Discord Name", style="cyan", width=15)
-            table.add_column("Agent ID", style="blue", width=12)
-            table.add_column("LLM", style="green", width=8)
-            table.add_column("API Key", style="yellow", width=8)
-            table.add_column("Discord Token", style="magenta", width=12)
-            table.add_column("Team", style="white", width=10)
-            table.add_column("Context", style="dim", width=7)
-            table.add_column("Turns", style="dim", width=6)
-            table.add_column("Delay", style="dim", width=6)
+            table = Table(show_header=True, box=ROUNDED, expand=True)
+            table.add_column("Discord Name", style="cyan", min_width=20, ratio=4)
+            table.add_column("Agent ID", style="blue", min_width=15, ratio=3)
+            table.add_column("LLM", style="green", min_width=10, ratio=2)
+            table.add_column("API Key", style="yellow", min_width=10, ratio=2)
+            table.add_column("Discord Token", style="magenta", min_width=15, ratio=3)
+            table.add_column("Team", style="white", min_width=12, ratio=2)
+            table.add_column("Context", style="dim", min_width=8, ratio=1)
+            table.add_column("Turns", style="dim", min_width=8, ratio=1)
+            table.add_column("Delay", style="dim", min_width=8, ratio=1)
             
             # Get running agents to access Discord names
             running_agents = self.get_agent_processes()
@@ -357,9 +368,21 @@ class DetailDashboard:
                     if not discord_name.startswith("🔴"):
                         discord_name = f"🟢 {discord_name}"
                 
-                # Status indicators
-                api_status = "✅" if os.getenv(api_key_env) else "❌"
-                token_status = "✅" if os.getenv(token_env) else "❌"
+                # Enhanced status indicators with key snippets
+                api_key_value = os.getenv(api_key_env, '')
+                token_value = os.getenv(token_env, '')
+                
+                if api_key_value:
+                    api_snippet = f"{api_key_value[:8]}...{api_key_value[-4:]}" if len(api_key_value) > 12 else api_key_value
+                    api_status = f"✅ {api_snippet}\n({api_key_env})"
+                else:
+                    api_status = f"❌ Missing\n({api_key_env})"
+                
+                if token_value:
+                    token_snippet = f"{token_value[:12]}...{token_value[-8:]}" if len(token_value) > 20 else f"{len(token_value)} chars"
+                    token_status = f"✅ {token_snippet}\n({token_env})"
+                else:
+                    token_status = f"❌ Missing\n({token_env})"
                 
                 # Get team membership
                 team = agent_teams.get(agent_name, "None")
@@ -389,8 +412,18 @@ class DetailDashboard:
                 token_val = os.getenv(token_env, "")
                 api_val = os.getenv(api_env, "")
                 
-                token_status = f"✅ {len(token_val)} chars" if token_val else "❌ Missing"
-                api_status = f"✅ {len(api_val)} chars" if api_val else "❌ Missing"
+                # Enhanced status with snippets and env var names
+                if token_val:
+                    token_snippet = f"{token_val[:12]}...{token_val[-8:]}" if len(token_val) > 20 else f"{len(token_val)} chars"
+                    token_status = f"✅ {token_snippet}\n({token_env})"
+                else:
+                    token_status = f"❌ Missing\n({token_env})"
+                
+                if api_val:
+                    api_snippet = f"{api_val[:8]}...{api_val[-4:]}" if len(api_val) > 12 else api_val
+                    api_status = f"✅ {api_snippet}\n({api_env})"
+                else:
+                    api_status = f"❌ Missing\n({api_env})"
                 
                 table.add_row(
                     f"🔧 {llm.upper()}",
@@ -407,6 +440,114 @@ class DetailDashboard:
             content,
             title="[bold magenta]⚙️ Detailed Agent Configuration[/bold magenta]",
             border_style="magenta",
+            box=DOUBLE
+        )
+    
+    def get_containerized_bots(self) -> Dict[str, Dict]:
+        """Get containerized Discord bots (Claude Code containers, etc.)"""
+        containers = {}
+        
+        if not self.docker_client:
+            return containers
+            
+        try:
+            all_containers = self.docker_client.containers.list(all=True)
+            for container in all_containers:
+                container_name = container.name.lower()
+                labels = container.labels or {}
+                
+                # Check if this is a SuperAgent containerized bot
+                is_bot_container = False
+                bot_type = "unknown"
+                
+                # Check for Claude Code containers
+                if ('claude-code' in container.image.tags[0] if container.image.tags else False) or \
+                   labels.get('superagent.type') == 'claude-code':
+                    is_bot_container = True
+                    bot_type = "claude-code"
+                
+                # Check for other SuperAgent containers
+                elif any(label in container_name for label in ['superagent', 'discord-bot', 'agent']) or \
+                     labels.get('superagent.team') or \
+                     labels.get('superagent.agent'):
+                    is_bot_container = True
+                    bot_type = labels.get('superagent.type', 'superagent-bot')
+                
+                if is_bot_container:
+                    containers[container.name] = {
+                        "id": container.id[:12],
+                        "status": container.status,
+                        "image": container.image.tags[0] if container.image.tags else "unknown",
+                        "ports": container.ports,
+                        "created": container.attrs['Created'],
+                        "type": bot_type,
+                        "team": labels.get('superagent.team', 'unknown'),
+                        "agent_type": labels.get('superagent.agent', 'unknown'),
+                        "labels": labels
+                    }
+        except Exception as e:
+            # Debug: show why Docker detection failed
+            pass
+            
+        return containers
+    
+    def create_containers_detail(self) -> Panel:
+        """Create detailed containerized bots view"""
+        containers = self.get_containerized_bots()
+        
+        if not containers:
+            content = Text()
+            content.append("❌ No containerized bots found\n\n", style="bold red")
+            content.append("Containerized bots include:\n", style="bold")
+            content.append("  • Claude Code containers\n", style="green")
+            content.append("  • SuperAgent Discord bots\n", style="green") 
+            content.append("  • DevOps agent containers\n", style="green")
+            content.append("  • Custom agent containers\n\n", style="green")
+            content.append("To deploy containers:\n", style="bold")
+            content.append("  python orchestrator_mvp.py spawn claude_agent\n", style="cyan")
+            content.append("  python control_plane/mcp_devops_agent.py\n", style="cyan")
+        else:
+            table = Table(show_header=True, box=ROUNDED, expand=True)
+            table.add_column("Container", style="cyan", min_width=20, ratio=4)
+            table.add_column("Type", style="blue", min_width=15, ratio=3)
+            table.add_column("Status", style="bold", min_width=12, ratio=2)
+            table.add_column("Team", style="green", min_width=10, ratio=2)
+            table.add_column("Image", style="yellow", min_width=20, ratio=4)
+            table.add_column("ID", style="dim", min_width=12, ratio=2)
+            table.add_column("Ports", style="magenta", min_width=15, ratio=3)
+            
+            for name, info in containers.items():
+                status_color = "green" if info["status"] == "running" else "red" if info["status"] == "exited" else "yellow"
+                status_icon = "🟢" if info["status"] == "running" else "🔴" if info["status"] == "exited" else "🟡"
+                
+                # Format ports
+                ports_str = ""
+                if info["ports"]:
+                    port_mappings = []
+                    for container_port, host_bindings in info["ports"].items():
+                        if host_bindings:
+                            for binding in host_bindings:
+                                host_port = binding.get('HostPort', '')
+                                if host_port:
+                                    port_mappings.append(f"{host_port}→{container_port}")
+                    ports_str = ", ".join(port_mappings)
+                
+                table.add_row(
+                    name,
+                    info["type"],
+                    f"{status_icon} [{status_color}]{info['status']}[/{status_color}]",
+                    info["team"],
+                    info["image"],
+                    info["id"],
+                    ports_str or "None"
+                )
+            
+            content = table
+        
+        return Panel(
+            content,
+            title="[bold blue]🐳 Containerized Discord Bots[/bold blue]",
+            border_style="blue",
             box=DOUBLE
         )
     
@@ -778,6 +919,11 @@ class DetailDashboard:
                 Layout(self.create_header(), size=3),
                 Layout(self.create_commands_detail())
             )
+        elif self.detail_mode == 'containers':
+            layout.split_column(
+                Layout(self.create_header(), size=3),
+                Layout(self.create_containers_detail())
+            )
         else:
             # Import existing dashboard panels
             from agent_dashboard import SuperAgentDashboard
@@ -855,6 +1001,8 @@ class DetailDashboard:
                             self.detail_mode = 'logs'
                         elif key == '7':
                             self.detail_mode = 'manage'
+                        elif key == '8':
+                            self.detail_mode = 'containers'
                         elif key == 'c':
                             self.detail_mode = 'commands'
                         
