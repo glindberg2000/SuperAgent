@@ -665,7 +665,7 @@ CAPABILITIES: You have access to file operations - you can download files upload
 def load_agent_config(config_key: str = "grok4_agent") -> AgentConfig:
     """Load agent configuration from environment and config files"""
     # Load from agent_config.json if available
-    config_file = Path(__file__).parent / "agent_config.json"
+    config_file = pathlib.Path(__file__).parent / "agent_config.json"
     if config_file.exists():
         with open(config_file, 'r') as f:
             config_data = json.load(f)
