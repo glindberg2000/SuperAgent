@@ -80,20 +80,37 @@ class SuperAgentDashboard:
         
         try:
             # Check for running agent processes
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time', 'cpu_percent', 'memory_percent']):
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
                 try:
-                    cmdline = ' '.join(proc.info['cmdline'])
+                    cmdline_list = proc.info.get('cmdline', [])
+                    if not cmdline_list:
+                        continue
+                        
+                    cmdline = ' '.join(cmdline_list)
                     
                     # Check for single agent launcher
                     if 'launch_single_agent.py' in cmdline:
-                        agent_type = cmdline.split()[-1] if cmdline.split()[-1] in ['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'] else 'unknown'
-                        agents[f"single_{agent_type}"] = {
+                        parts = cmdline.split()
+                        agent_type = parts[-1] if len(parts) > 0 and parts[-1] in ['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'] else 'unknown'
+                        
+                        # Get CPU and memory with error handling
+                        try:
+                            cpu_percent = proc.cpu_percent() or 0
+                        except:
+                            cpu_percent = 0
+                            
+                        try:
+                            memory_percent = proc.memory_percent() or 0
+                        except:
+                            memory_percent = 0
+                        
+                        agents[agent_type] = {
                             "pid": proc.info['pid'],
                             "type": "single_agent",
                             "agent": agent_type,
                             "uptime": time.time() - proc.info['create_time'],
-                            "cpu": proc.info['cpu_percent'] or 0,
-                            "memory": proc.info['memory_percent'] or 0,
+                            "cpu": cpu_percent,
+                            "memory": memory_percent,
                             "status": "running"
                         }
                     

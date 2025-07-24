@@ -85,6 +85,29 @@ class SuperAgentManager:
         
         return True, "Configuration valid"
     
+    def _find_running_agent(self, agent_type: str) -> Optional[int]:
+        """Find if an agent is already running by scanning processes"""
+        try:
+            import psutil
+            for proc in psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmdline = proc.info.get('cmdline', [])
+                    if cmdline and 'launch_single_agent.py' in ' '.join(cmdline) and agent_type in cmdline:
+                        return proc.info['pid']
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            return None
+        except ImportError:
+            # Fallback to subprocess if psutil not available
+            try:
+                result = subprocess.run(['pgrep', '-f', f'launch_single_agent.py {agent_type}'], 
+                                      capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    return int(result.stdout.strip().split('\n')[0])
+            except:
+                pass
+            return None
+    
     def deploy_agent(self, agent_type: str) -> Tuple[bool, str]:
         """Deploy a single agent"""
         # Validate configuration
@@ -92,9 +115,10 @@ class SuperAgentManager:
         if not is_valid:
             return False, msg
         
-        # Check if agent is already running
-        if agent_type in self.running_agents:
-            return False, f"Agent {agent_type} is already running (PID: {self.running_agents[agent_type]['pid']})"
+        # Check if agent is already running by scanning processes
+        existing_pid = self._find_running_agent(agent_type)
+        if existing_pid:
+            return False, f"Agent {agent_type} is already running (PID: {existing_pid})"
         
         try:
             # Get virtual environment python
@@ -145,12 +169,14 @@ class SuperAgentManager:
     
     def stop_agent(self, agent_type: str) -> Tuple[bool, str]:
         """Stop a running agent"""
-        if agent_type not in self.running_agents:
+        # Find the running process
+        running_pid = self._find_running_agent(agent_type)
+        if not running_pid:
             return False, f"Agent {agent_type} is not running"
         
         try:
-            agent_info = self.running_agents[agent_type]
-            process = agent_info["process"]
+            import psutil
+            process = psutil.Process(running_pid)
             
             # Terminate the process gracefully
             process.terminate()
@@ -189,28 +215,31 @@ class SuperAgentManager:
     
     def get_agent_status(self, agent_type: str) -> Dict:
         """Get detailed status of a specific agent"""
-        if agent_type not in self.running_agents:
+        # Check if agent is actually running by scanning processes
+        running_pid = self._find_running_agent(agent_type)
+        if not running_pid:
             return {"status": "stopped"}
         
-        agent_info = self.running_agents[agent_type]
-        
-        # Check if process is still alive
+        # Get process info
         try:
-            process = psutil.Process(agent_info["pid"])
+            import psutil
+            proc = psutil.Process(running_pid)
+            create_time = datetime.fromtimestamp(proc.create_time())
             return {
                 "status": "running",
-                "pid": agent_info["pid"],
-                "started": agent_info["started"].isoformat(),
-                "uptime": (datetime.now() - agent_info["started"]).total_seconds(),
-                "cpu_percent": process.cpu_percent(),
-                "memory_percent": process.memory_percent(),
-                "log_file": agent_info["log_file"],
-                "config": agent_info["config"]
+                "pid": running_pid,
+                "started": create_time.isoformat(),
+                "uptime": (datetime.now() - create_time).total_seconds(),
+                "memory_mb": round(proc.memory_info().rss / 1024 / 1024, 1),
+                "cpu_percent": proc.cpu_percent()
             }
-        except psutil.NoSuchProcess:
-            # Process died, clean up
-            del self.running_agents[agent_type]
-            return {"status": "crashed"}
+        except:
+            return {
+                "status": "running",
+                "pid": running_pid,
+                "started": "unknown",
+                "uptime": 0
+            }
     
     def restart_agent(self, agent_type: str) -> Tuple[bool, str]:
         """Restart an agent"""
