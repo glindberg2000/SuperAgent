@@ -242,6 +242,16 @@ class MCPDevOpsAgent:
         
         self.logger.info("Memory database initialized")
     
+    async def _register_agent(self, name: str, agent_type: str, identifier: str, status: str, config: Dict[str, Any]):
+        """Register an agent in the registry"""
+        with sqlite3.connect(self.memory_db_path) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO agent_registry 
+                (agent_name, agent_type, container_id, status, config, last_updated)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (name, agent_type, identifier, status, json.dumps(config)))
+            conn.commit()
+    
     def _get_available_agent_types(self) -> Dict[str, Dict[str, Any]]:
         """Dynamically discover available agent types from configuration files"""
         # Cache for 5 minutes to avoid constant file reads
@@ -423,20 +433,12 @@ COMMAND PATTERNS:
         if username == 'DevOps':
             return False, "own_message"
         
-        # Always respond to direct mentions
-        if '@devops' in content or 'devops' in content:
+        # ONLY respond to direct mentions (DevOps bot ID: 1397754394950373428)
+        if '<@1397754394950373428>' in content or '@devops' in content:
             return True, "mentioned"
         
-        # Respond to system/infrastructure keywords
-        keywords = ['status', 'deploy', 'agent', 'docker', 'system', 'health', 'logs']
-        if any(keyword in content for keyword in keywords):
-            return True, "keyword_match"
-        
-        # Respond to questions
-        if any(q in content for q in ['?', 'what', 'how', 'why', 'when', 'where']):
-            return True, "question"
-        
-        return False, "no_trigger"
+        # Don't respond to anything else - require explicit mention
+        return False, "no_mention"
     
     async def _generate_response(self, message_data: Dict[str, Any], context_messages: List[Dict]) -> str:
         """Generate AI response using OpenAI with structured outputs"""
@@ -989,16 +991,61 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
                     env_name = value[2:-1]
                     env_vars[key] = os.getenv(env_name, value)
             
-            # Note: For now, return success but indicate manual deployment needed
-            # In a full implementation, you'd use subprocess to start the script
-            self.logger.info(f"✅ Non-container agent {agent_type} ready for deployment")
-            return {
-                "success": True, 
-                "name": name, 
-                "type": "non_container",
-                "script": str(script_path),
-                "note": f"Manual deployment required: Run 'python {script_path}' with config key '{template.get('config_key', agent_type)}'"
-            }
+            # Actually start the process
+            venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
+            if not venv_python.exists():
+                # Fallback to system python
+                venv_python = "python"
+            
+            # Set up environment
+            proc_env = os.environ.copy()
+            proc_env.update(env_vars)
+            
+            # Add config key for enhanced_discord_agent.py
+            config_key = template.get('config_key', agent_type)
+            
+            # Start the process
+            self.logger.info(f"Starting non-container agent: {script_path} with config key: {config_key}")
+            
+            import subprocess
+            process = subprocess.Popen(
+                [str(venv_python), str(script_path), "--config-key", config_key],
+                env=proc_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(script_path.parent)
+            )
+            
+            # Give it a moment to start
+            import time
+            await asyncio.sleep(2)
+            
+            # Check if process is still running
+            if process.poll() is None:
+                # Store process info in registry
+                await self._register_agent(name, agent_type, str(process.pid), "running", template)
+                
+                self.logger.info(f"✅ Non-container agent {agent_type} started successfully (PID: {process.pid})")
+                return {
+                    "success": True,
+                    "name": name,
+                    "type": "non_container", 
+                    "script": str(script_path),
+                    "pid": process.pid,
+                    "status": "running",
+                    "config_key": config_key
+                }
+            else:
+                # Process failed to start
+                stdout, stderr = process.communicate()
+                error_msg = f"Process failed to start. Error: {stderr.decode()}"
+                self.logger.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "stdout": stdout.decode(),
+                    "stderr": stderr.decode()
+                }
             
         except Exception as e:
             self.logger.error(f"Failed to prepare {agent_type} non-container agent: {e}")

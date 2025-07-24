@@ -662,8 +662,50 @@ CAPABILITIES: You have access to file operations - you can download files upload
                 # Start listening for messages
                 await self.listen_for_messages(session)
 
-def load_agent_config() -> AgentConfig:
+def load_agent_config(config_key: str = "grok4_agent") -> AgentConfig:
     """Load agent configuration from environment and config files"""
+    # Load from agent_config.json if available
+    config_file = Path(__file__).parent / "agent_config.json"
+    if config_file.exists():
+        with open(config_file, 'r') as f:
+            config_data = json.load(f)
+            agents = config_data.get('agents', {})
+            if config_key in agents:
+                agent_config = agents[config_key]
+                
+                # Map llm_type to appropriate token and API key
+                token_map = {
+                    "grok4": "DISCORD_TOKEN_GROK",
+                    "claude": "DISCORD_TOKEN2", 
+                    "gemini": "DISCORD_TOKEN3",
+                    "openai": "DISCORD_TOKEN4"
+                }
+                
+                api_key_map = {
+                    "grok4": "XAI_API_KEY",
+                    "claude": "ANTHROPIC_API_KEY",
+                    "gemini": "GOOGLE_AI_API_KEY", 
+                    "openai": "OPENAI_API_KEY"
+                }
+                
+                llm_type = agent_config.get('llm_type', 'grok4')
+                token_env = token_map.get(llm_type, "DISCORD_TOKEN_GROK")
+                api_key_env = api_key_map.get(llm_type, "XAI_API_KEY")
+                
+                return AgentConfig(
+                    name=agent_config.get('name', 'Agent'),
+                    bot_token=os.getenv(token_env, ""),
+                    server_id=os.getenv("DEFAULT_SERVER_ID", "1395578178973597799"),
+                    api_key=os.getenv(api_key_env, ""),
+                    llm_type=llm_type,
+                    max_context_messages=agent_config.get('max_context_messages', 15),
+                    max_turns_per_thread=agent_config.get('max_turns_per_thread', 30),
+                    response_delay=agent_config.get('response_delay', 2.0),
+                    ignore_bots=agent_config.get('ignore_bots', True),
+                    bot_allowlist=agent_config.get('bot_allowlist', [])
+                )
+    
+    # Fallback to default Grok4 config
     return AgentConfig(
         name="Grok4Agent",
         bot_token=os.getenv("DISCORD_TOKEN_GROK", ""),
@@ -679,7 +721,12 @@ def load_agent_config() -> AgentConfig:
 
 async def main():
     """Main entry point"""
-    config = load_agent_config()
+    import argparse
+    parser = argparse.ArgumentParser(description='Enhanced Discord Agent')
+    parser.add_argument('--config-key', default='grok4_agent', help='Configuration key from agent_config.json')
+    args = parser.parse_args()
+    
+    config = load_agent_config(args.config_key)
     agent = EnhancedDiscordAgent(config)
     await agent.run()
 
