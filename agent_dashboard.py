@@ -336,7 +336,7 @@ class SuperAgentDashboard:
         containers = self.get_docker_containers()
         postgres_container = None
         for name, info in containers.items():
-            if 'postgres' in name.lower():
+            if 'superagent-postgres' in name.lower() or 'postgres' in name.lower():
                 postgres_container = info
                 break
         
@@ -423,11 +423,11 @@ class SuperAgentDashboard:
                 box=ROUNDED
             )
         
-        table = Table(show_header=True, box=None)
-        table.add_column("Container", style="cyan")
-        table.add_column("Status", style="bold")
-        table.add_column("Image", style="blue")
-        table.add_column("ID", style="dim")
+        table = Table(show_header=True, box=ROUNDED, expand=True)
+        table.add_column("Container", style="cyan", min_width=20, ratio=3)
+        table.add_column("Status", style="bold", min_width=12, ratio=2)
+        table.add_column("Image", style="blue", min_width=15, ratio=3)
+        table.add_column("ID", style="dim", min_width=12, ratio=2)
         
         for name, info in containers.items():
             status_color = "green" if info["status"] == "running" else "red" if info["status"] == "exited" else "yellow"
@@ -532,16 +532,8 @@ class SuperAgentDashboard:
         """Create agent configurations panel"""
         try:
             configs_data = self.get_agent_configs_data()
-            # Format configs data for display
-            configs_lines = []
-            for agent_name, agent_config in configs_data.items():
-                configs_lines.append(f"Agent: {agent_name}")
-                configs_lines.append(f"  LLM: {agent_config.get('llm_type', 'unknown')}")
-                configs_lines.append(f"  Max Context: {agent_config.get('max_context_messages', 'N/A')}")
-                configs_lines.append(f"  Max Turns: {agent_config.get('max_turns_per_thread', 'N/A')}")
-                configs_lines.append("")
-            configs = "\n".join(configs_lines)
-            if not configs:
+            
+            if not configs_data:
                 return Panel(
                     "[yellow]No agent configs found[/yellow]",
                     title="[bold magenta]Agent Configs[/bold magenta]",
@@ -549,24 +541,23 @@ class SuperAgentDashboard:
                     box=ROUNDED
                 )
             
-            content = []
-            for line in configs.split('\n')[:8]:  # Show first 8 lines
-                if line.strip():
-                    # Color code the line based on content
-                    if "Agent:" in line:
-                        content.append(f"[bold cyan]{line}[/bold cyan]")
-                    elif "LLM:" in line:
-                        content.append(f"[green]{line}[/green]")
-                    elif "Max Context:" in line or "Max Turns:" in line:
-                        content.append(f"[yellow]{line}[/yellow]")
-                    else:
-                        content.append(line)
+            # Create a table for better formatting
+            table = Table(show_header=True, box=ROUNDED, expand=True, show_lines=False)
+            table.add_column("Agent", style="cyan", min_width=15, ratio=3)
+            table.add_column("LLM", style="green", min_width=8, ratio=2)
+            table.add_column("Context", style="yellow", min_width=8, ratio=2)
+            table.add_column("Max Turns", style="yellow", min_width=8, ratio=2)
             
-            if len(configs.split('\n')) > 8:
-                content.append("[dim]... (truncated)[/dim]")
+            for agent_name, agent_config in configs_data.items():
+                table.add_row(
+                    agent_name,
+                    agent_config.get('llm_type', 'unknown'),
+                    str(agent_config.get('max_context_messages', 'N/A')),
+                    str(agent_config.get('max_turns_per_thread', 'N/A'))
+                )
             
             return Panel(
-                "\n".join(content),
+                table,
                 title="[bold magenta]Agent Configs[/bold magenta]",
                 border_style="magenta",
                 box=ROUNDED
@@ -607,11 +598,11 @@ class SuperAgentDashboard:
             Layout(name="bottom")
         )
         
-        # Split main section into columns
+        # Split main section into columns with better ratios
         layout["main"].split_row(
-            Layout(name="left"),
-            Layout(name="center"),
-            Layout(name="right")
+            Layout(name="left", ratio=2),
+            Layout(name="center", ratio=3),  # Make center column wider
+            Layout(name="right", ratio=2)
         )
         
         # Split left column
