@@ -74,6 +74,44 @@ class DetailDashboard:
             "boot_time": psutil.boot_time()
         }
     
+    def get_discord_bot_name(self, agent_type: str) -> str:
+        """Extract Discord bot name from agent logs"""
+        log_files = {
+            "grok4_agent": ["grok4_restart.log", "grok4_fixed.log", "grok4_single_new.log"],
+            "claude_agent": ["claude_restart.log", "claude_fixed.log", "claude_single.log"],
+            "gemini_agent": ["gemini_single.log"],
+            "devops_agent": ["mcp_devops_agent.log"],
+            "o3_agent": ["o3_single.log"]
+        }
+        
+        # Try to find the bot name from logs
+        for log_file in log_files.get(agent_type, []):
+            log_path = Path("logs") / log_file
+            if log_path.exists():
+                try:
+                    with open(log_path, 'r') as f:
+                        # Read all lines and search for the login message
+                        content = f.read()
+                        # Look for the most recent "Logged in as" message
+                        import re
+                        matches = re.findall(r'Logged in as (.+)', content)
+                        if matches:
+                            # Use the last match found (most recent)
+                            bot_name = matches[-1].strip()
+                            return bot_name
+                except Exception:
+                    continue
+        
+        # Fallback to agent type mapping
+        fallback_names = {
+            "grok4_agent": "Grok4",
+            "claude_agent": "Claude Agent",
+            "gemini_agent": "Gemini Agent",
+            "devops_agent": "DevOps",
+            "o3_agent": "O3 Agent"
+        }
+        return fallback_names.get(agent_type, agent_type.replace("_", " ").title())
+
     def get_agent_processes(self) -> Dict[str, Dict]:
         """Get running agent processes"""
         agents = {}
@@ -90,10 +128,43 @@ class DetailDashboard:
                         parts = cmdline.split()
                         agent_type = parts[-1] if len(parts) > 0 and parts[-1] in ['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'] else 'unknown'
                         
+                        # Get actual Discord bot name
+                        discord_name = self.get_discord_bot_name(agent_type)
+                        
                         agents[agent_type] = {
                             "pid": proc.info['pid'],
                             "type": "single_agent",
                             "agent": agent_type,
+                            "discord_name": discord_name,
+                            "uptime": time.time() - proc.info['create_time'],
+                            "cpu": proc.cpu_percent() or 0,
+                            "memory": proc.memory_percent() or 0,
+                            "status": "running"
+                        }
+                    
+                    # Check for DevOps agent
+                    elif 'mcp_devops_agent.py' in cmdline:
+                        # Get actual Discord bot name
+                        discord_name = self.get_discord_bot_name("devops_agent")
+                        
+                        agents["devops_agent"] = {
+                            "pid": proc.info['pid'],
+                            "type": "devops_agent",
+                            "agent": "devops",
+                            "discord_name": discord_name,
+                            "uptime": time.time() - proc.info['create_time'],
+                            "cpu": proc.cpu_percent() or 0,
+                            "memory": proc.memory_percent() or 0,
+                            "status": "running"
+                        }
+                    
+                    # Check for other SuperAgent processes
+                    elif any(x in cmdline for x in ['superagent_manager.py', 'multi_agent_launcher.py', 'enhanced_discord_agent.py']):
+                        process_name = "manager" if 'manager' in cmdline else "launcher" if 'launcher' in cmdline else "discord_agent"
+                        agents[f"{process_name}_{proc.info['pid']}"] = {
+                            "pid": proc.info['pid'],
+                            "type": "system_process",
+                            "agent": process_name,
                             "uptime": time.time() - proc.info['create_time'],
                             "cpu": proc.cpu_percent() or 0,
                             "memory": proc.memory_percent() or 0,
@@ -162,8 +233,11 @@ class DetailDashboard:
                 except:
                     cmdline = "N/A"
                 
+                # Use Discord bot name if available, otherwise fall back to agent name
+                display_name = info.get("discord_name", name.replace("_", " ").title())
+                
                 table.add_row(
-                    name.replace("_", " ").title(),
+                    display_name,
                     str(info["pid"]),
                     uptime_str,
                     f"{info['cpu']:.1f}%",
@@ -235,15 +309,28 @@ class DetailDashboard:
             content.append("Please check configuration file", style="cyan")
         else:
             table = Table(show_header=True, box=ROUNDED)
-            table.add_column("Agent", style="cyan")
-            table.add_column("LLM Type", style="green")
-            table.add_column("API Key", style="yellow")
-            table.add_column("Max Context", style="blue")
-            table.add_column("Max Turns", style="magenta")
-            table.add_column("Response Delay", style="red")
-            table.add_column("Ignore Bots", style="white")
+            table.add_column("Discord Name", style="cyan", width=15)
+            table.add_column("Agent ID", style="blue", width=12)
+            table.add_column("LLM", style="green", width=8)
+            table.add_column("API Key", style="yellow", width=8)
+            table.add_column("Discord Token", style="magenta", width=12)
+            table.add_column("Team", style="white", width=10)
+            table.add_column("Context", style="dim", width=7)
+            table.add_column("Turns", style="dim", width=6)
+            table.add_column("Delay", style="dim", width=6)
             
-            # API key mapping
+            # Get running agents to access Discord names
+            running_agents = self.get_agent_processes()
+            teams_data = self.agent_config_data.get('teams', {})
+            
+            # Token and API key mapping
+            token_map = {
+                "grok4": "DISCORD_TOKEN_GROK4",
+                "claude": "DISCORD_TOKEN_CLAUDE", 
+                "gemini": "DISCORD_TOKEN_GEMINI",
+                "openai": "DISCORD_TOKEN_OPENAI"
+            }
+            
             key_map = {
                 "grok4": "XAI_API_KEY",
                 "claude": "ANTHROPIC_API_KEY", 
@@ -251,32 +338,66 @@ class DetailDashboard:
                 "openai": "OPENAI_API_KEY"
             }
             
+            # Find which team each agent belongs to
+            agent_teams = {}
+            for team_name, team_config in teams_data.items():
+                team_agents = team_config.get('agents', [])
+                for agent_id in team_agents:
+                    agent_teams[agent_id] = team_name
+            
             for agent_name, config in configs.items():
                 llm_type = config.get('llm_type', 'unknown')
                 api_key_env = key_map.get(llm_type, '')
+                token_env = token_map.get(llm_type, '')
+                
+                # Get Discord name from running agent or show as offline
+                discord_name = "🔴 Offline"
+                if agent_name in running_agents:
+                    discord_name = running_agents[agent_name].get("discord_name", "Unknown")
+                    if not discord_name.startswith("🔴"):
+                        discord_name = f"🟢 {discord_name}"
+                
+                # Status indicators
                 api_status = "✅" if os.getenv(api_key_env) else "❌"
+                token_status = "✅" if os.getenv(token_env) else "❌"
+                
+                # Get team membership
+                team = agent_teams.get(agent_name, "None")
                 
                 table.add_row(
+                    discord_name,
                     agent_name,
                     llm_type,
                     api_status,
+                    token_status,
+                    team,
                     str(config.get('max_context_messages', 'N/A')),
                     str(config.get('max_turns_per_thread', 'N/A')),
-                    f"{config.get('response_delay', 'N/A')}s",
-                    "✅" if config.get('ignore_bots', True) else "❌"
+                    f"{config.get('response_delay', 'N/A')}s"
                 )
             
-            # Add separator and API key status
-            table.add_row("", "", "", "", "", "", "")
-            table.add_row("API KEY STATUS", "", "", "", "", "", "")
-            table.add_row("", "", "", "", "", "", "")
+            # Add separator and detailed environment status
+            table.add_row("", "", "", "", "", "", "", "", "")
+            table.add_row("[bold]ENVIRONMENT STATUS[/bold]", "", "", "", "", "", "", "", "")
+            table.add_row("", "", "", "", "", "", "", "", "")
             
-            for llm, env_var in key_map.items():
-                api_status = "✅ Set" if os.getenv(env_var) else "❌ Missing"
+            # Show detailed environment variable status
+            for llm in ["grok4", "claude", "gemini", "openai"]:
+                token_env = token_map.get(llm, "")
+                api_env = key_map.get(llm, "")
+                
+                token_val = os.getenv(token_env, "")
+                api_val = os.getenv(api_env, "")
+                
+                token_status = f"✅ {len(token_val)} chars" if token_val else "❌ Missing"
+                api_status = f"✅ {len(api_val)} chars" if api_val else "❌ Missing"
+                
                 table.add_row(
-                    f"{llm.upper()} API Key",
-                    env_var,
+                    f"🔧 {llm.upper()}",
+                    token_env.replace("DISCORD_TOKEN_", ""),
+                    "",
                     api_status,
+                    token_status,
                     "", "", "", ""
                 )
             

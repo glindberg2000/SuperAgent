@@ -98,6 +98,44 @@ class SuperAgentDashboard:
         except Exception as e:
             return False, str(e)[:50]
     
+    def get_discord_bot_name(self, agent_type: str) -> str:
+        """Extract Discord bot name from agent logs"""
+        log_files = {
+            "grok4_agent": ["grok4_fixed.log", "grok4_single_new.log"],
+            "claude_agent": ["claude_fixed.log", "claude_single.log"],
+            "gemini_agent": ["gemini_single.log"],
+            "devops_agent": ["mcp_devops_agent.log"],
+            "o3_agent": ["o3_single.log"]
+        }
+        
+        # Try to find the bot name from logs
+        for log_file in log_files.get(agent_type, []):
+            log_path = self.logs_dir / log_file
+            if log_path.exists():
+                try:
+                    with open(log_path, 'r') as f:
+                        # Read all lines and search for the login message
+                        content = f.read()
+                        # Look for the most recent "Logged in as" message
+                        import re
+                        matches = re.findall(r'Logged in as (.+)', content)
+                        if matches:
+                            # Use the last match found (most recent)
+                            bot_name = matches[-1].strip()
+                            return bot_name
+                except Exception:
+                    continue
+        
+        # Fallback to agent type mapping
+        fallback_names = {
+            "grok4_agent": "Grok4",
+            "claude_agent": "Claude Agent",
+            "gemini_agent": "Gemini Agent",
+            "devops_agent": "DevOps",
+            "o3_agent": "O3 Agent"
+        }
+        return fallback_names.get(agent_type, agent_type.replace("_", " ").title())
+
     def get_agent_processes(self) -> Dict[str, Dict]:
         """Get running agent processes"""
         agents = {}
@@ -128,10 +166,14 @@ class SuperAgentDashboard:
                         except:
                             memory_percent = 0
                         
+                        # Get actual Discord bot name
+                        discord_name = self.get_discord_bot_name(agent_type)
+                        
                         agents[agent_type] = {
                             "pid": proc.info['pid'],
                             "type": "single_agent",
                             "agent": agent_type,
+                            "discord_name": discord_name,
                             "uptime": time.time() - proc.info['create_time'],
                             "cpu": cpu_percent,
                             "memory": memory_percent,
@@ -152,13 +194,28 @@ class SuperAgentDashboard:
                     
                     # Check for DevOps agent
                     elif 'mcp_devops_agent.py' in cmdline:
+                        # Get CPU and memory with error handling
+                        try:
+                            cpu_percent = proc.cpu_percent() or 0
+                        except:
+                            cpu_percent = 0
+                            
+                        try:
+                            memory_percent = proc.memory_percent() or 0
+                        except:
+                            memory_percent = 0
+                        
+                        # Get actual Discord bot name
+                        discord_name = self.get_discord_bot_name("devops_agent")
+                        
                         agents["devops_agent"] = {
                             "pid": proc.info['pid'],
                             "type": "devops_agent",
                             "agent": "devops",
+                            "discord_name": discord_name,
                             "uptime": time.time() - proc.info['create_time'],
-                            "cpu": proc.info['cpu_percent'] or 0,
-                            "memory": proc.info['memory_percent'] or 0,
+                            "cpu": cpu_percent,
+                            "memory": memory_percent,
                             "status": "running"
                         }
                         
@@ -325,7 +382,7 @@ class SuperAgentDashboard:
             )
         
         table = Table(show_header=True, box=None)
-        table.add_column("Agent", style="cyan")
+        table.add_column("Discord Name", style="cyan")
         table.add_column("Type", style="blue")
         table.add_column("PID", style="white")
         table.add_column("Uptime", style="yellow")
@@ -335,8 +392,10 @@ class SuperAgentDashboard:
         
         for name, info in agents.items():
             uptime_str = f"{info['uptime']/60:.1f}m" if info['uptime'] < 3600 else f"{info['uptime']/3600:.1f}h"
+            # Use Discord bot name if available, otherwise fall back to agent name
+            display_name = info.get("discord_name", name.replace("_", " ").title())
             table.add_row(
-                name.replace("_", " ").title(),
+                display_name,
                 info["type"].replace("_", " ").title(),
                 str(info["pid"]),
                 uptime_str,

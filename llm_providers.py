@@ -134,7 +134,7 @@ class ClaudeProvider(LLMProvider):
             })
         
         payload = {
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
             "temperature": 0.7,
             "messages": claude_messages
@@ -144,9 +144,9 @@ class ClaudeProvider(LLMProvider):
             payload["system"] = system_prompt
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "x-api-version": "2023-06-01"
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
         }
         
         try:

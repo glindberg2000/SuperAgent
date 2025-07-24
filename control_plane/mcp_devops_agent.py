@@ -433,11 +433,20 @@ COMMAND PATTERNS:
         if username == 'DevOps':
             return False, "own_message"
         
-        # ONLY respond to direct mentions (DevOps bot ID: 1397754394950373428)
+        # Respond to direct mentions (DevOps bot ID: 1397754394950373428)
         if '<@1397754394950373428>' in content or '@devops' in content:
             return True, "mentioned"
         
-        # Don't respond to anything else - require explicit mention
+        # Also respond to common agent management queries even without mention
+        # This makes the bot more helpful for follow-up questions
+        if any(keyword in content for keyword in [
+            'which agents', 'list agents', 'running agents', 'agent status',
+            'deploy agent', 'stop agent', 'system status', 'available agents',
+            'agents running', 'show agents'
+        ]):
+            return True, "management_query"
+        
+        # Don't respond to other messages - require explicit mention
         return False, "no_mention"
     
     async def _generate_response(self, message_data: Dict[str, Any], context_messages: List[Dict]) -> str:
@@ -1147,26 +1156,80 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
             return {"success": False, "error": str(e)}
     
     async def list_active_agents(self) -> Dict[str, Any]:
-        """List all active agent containers"""
-        if not self.docker_client:
-            return {"success": False, "error": "Docker daemon not available"}
-        
+        """List all active agents (both containers and processes)"""
         try:
-            containers = self.docker_client.containers.list(
-                filters={"label": "superagent.managed=true"}
-            )
-            
             agents = []
-            for container in containers:
-                labels = container.labels
-                agents.append({
-                    "name": container.name,
-                    "type": labels.get('superagent.type', 'unknown'),
-                    "status": container.status,
-                    "team": labels.get('superagent.team', 'default'),
-                    "created": container.attrs['Created'],
-                    "image": container.image.tags[0] if container.image.tags else 'unknown'
-                })
+            
+            # Get container-based agents
+            if self.docker_client:
+                try:
+                    containers = self.docker_client.containers.list(
+                        filters={"label": "superagent.managed=true"}
+                    )
+                    
+                    for container in containers:
+                        labels = container.labels
+                        agents.append({
+                            "name": container.name,
+                            "type": labels.get('superagent.type', 'unknown'),
+                            "status": container.status,
+                            "team": labels.get('superagent.team', 'default'),
+                            "created": container.attrs['Created'],
+                            "deployment": "container",
+                            "pid": None,
+                            "uptime": None
+                        })
+                except Exception as e:
+                    self.logger.warning(f"Failed to get container agents: {e}")
+            
+            # Get process-based agents (like launch_single_agent.py)
+            import psutil
+            import time
+            
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+                try:
+                    cmdline_list = proc.info.get('cmdline', [])
+                    if not cmdline_list:
+                        continue
+                    
+                    cmdline = ' '.join(cmdline_list)
+                    
+                    if 'launch_single_agent.py' in cmdline:
+                        parts = cmdline.split()
+                        agent_type = parts[-1] if len(parts) > 0 and parts[-1] in ['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'] else 'unknown'
+                        
+                        if agent_type != 'unknown':
+                            uptime_seconds = time.time() - proc.info['create_time']
+                            uptime_str = f"{uptime_seconds/60:.1f}m" if uptime_seconds < 3600 else f"{uptime_seconds/3600:.1f}h"
+                            
+                            agents.append({
+                                "name": agent_type.replace('_agent', '').title() + 'Agent',
+                                "type": agent_type,
+                                "status": "running",
+                                "team": "default",
+                                "created": proc.info['create_time'],
+                                "deployment": "process",
+                                "pid": proc.info['pid'],
+                                "uptime": uptime_str
+                            })
+                    
+                    elif 'mcp_devops_agent.py' in cmdline:
+                        uptime_seconds = time.time() - proc.info['create_time']
+                        uptime_str = f"{uptime_seconds/60:.1f}m" if uptime_seconds < 3600 else f"{uptime_seconds/3600:.1f}h"
+                        
+                        agents.append({
+                            "name": "DevOps Agent",
+                            "type": "devops_agent",
+                            "status": "running",
+                            "team": "system",
+                            "created": proc.info['create_time'],
+                            "deployment": "process",
+                            "pid": proc.info['pid'],
+                            "uptime": uptime_str
+                        })
+                        
+                except Exception:
+                    continue
             
             return {"success": True, "agents": agents}
             
@@ -1208,9 +1271,10 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
                     agent_list = []
                     for agent in result['agents']:
                         status_emoji = "🟢" if agent['status'] == 'running' else "🔴"
-                        agent_list.append(f"{status_emoji} **{agent['name']}** ({agent['type']}) - Team: {agent['team']}")
+                        deployment_info = f"(PID: {agent['pid']}, {agent['uptime']})" if agent.get('deployment') == 'process' else "(Container)"
+                        agent_list.append(f"{status_emoji} **{agent['name']}** ({agent['type']}) - Team: {agent['team']} {deployment_info}")
                     
-                    return f"📋 **Active Agents:**\n" + "\n".join(agent_list)
+                    return f"📋 **Active Agents ({len(result['agents'])} running):**\n" + "\n".join(agent_list)
                 else:
                     return f"❌ Failed to list agents: {result['error']}"
             

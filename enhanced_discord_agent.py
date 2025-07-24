@@ -141,10 +141,11 @@ class EnhancedDiscordAgent:
         self.memory = MemoryManagerWrapper(memory_client)
         self.llm_provider = self._create_llm_provider()
         
-        # Configure MCP to use local mcp-discord with agent-specific token
-        self.mcp_command = "python"
+        # Configure MCP to use mcp-discord-global with agent-specific token
+        self.mcp_command = "uv"
         self.mcp_args = [
-            str(pathlib.Path(__file__).parent / "mcp-discord" / "src" / "discord_mcp" / "server.py"),
+            "--directory", "/Users/greg/mcp-discord-global",
+            "run", "mcp-discord",
             "--token", config.bot_token,
             "--server-id", config.server_id
         ]
@@ -186,16 +187,14 @@ class EnhancedDiscordAgent:
         if self.config.allowed_channels and channel_id not in self.config.allowed_channels:
             return False, "channel not allowed"
         
-        # Check if message mentions this bot (to prevent responding to everything)
+        # Since we're using mention_only=True in wait_for_message, we should receive mentioned messages
+        # But still allow for manual override for specific channels or DMs
         content = message_data.get('content', '')
-        bot_mention = f"<@{os.getenv('DISCORD_BOT_USER_ID', '1396750004588253205')}>"  # Bot's user ID
         
-        # Only respond if mentioned, unless it's a DM or special channel
-        if bot_mention not in content and not channel_id.startswith('DM'):
-            # Allow responses in certain channels or if configured to respond to all
-            respond_to_all = getattr(self.config, 'respond_to_all', False)
-            if not respond_to_all:
-                return False, "not mentioned"
+        # Allow responses in DMs or if configured to respond to all
+        respond_to_all = getattr(self.config, 'respond_to_all', False)
+        if channel_id.startswith('DM') or respond_to_all:
+            pass  # Continue to respond
         
         # Check max turns per thread
         thread_id = message_data.get('thread_id', channel_id)
@@ -237,6 +236,20 @@ class EnhancedDiscordAgent:
                 thread_id, 
                 limit=context_limit
             )
+            
+            # Always ensure we have at least the current message
+            if not context_messages:
+                context_messages = []
+            
+            # Add current message if not already in context
+            current_message = {
+                'author': message_data.get('author', message_data.get('author_name', 'Unknown')),
+                'content': message_data.get('content', ''),
+                'timestamp': message_data.get('timestamp', ''),
+                'is_bot': False,
+                'agent_name': None
+            }
+            context_messages.append(current_message)
             
             if attachments:
                 logger.info(f"Message has {len(attachments)} attachment(s)")
@@ -461,10 +474,13 @@ CAPABILITIES: You have access to file operations - you can download files upload
         
         while True:
             try:
-                # Wait for new message with shorter timeout
+                # Wait for new message that mentions this bot or management queries
                 result = await session.call_tool(
                     "wait_for_message",
-                    {"timeout": 10}  # 10 second timeout
+                    {
+                        "timeout": 10,  # 10 second timeout
+                        "mention_only": True  # Only get messages that mention the bot
+                    }
                 )
                 
                 if result and result.content:

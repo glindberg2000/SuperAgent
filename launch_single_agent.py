@@ -18,19 +18,19 @@ load_dotenv()
 def create_agent_config(agent_type: str) -> AgentConfig:
     """Create agent configuration based on type"""
     
-    # Token mapping for different agent types
+    # Token mapping for different agent types (standardized naming)
     token_map = {
-        "grok4_agent": "DISCORD_TOKEN_GROK",
-        "claude_agent": "DISCORD_TOKEN2", 
-        "gemini_agent": "DISCORD_TOKEN3",
-        "o3_agent": "DISCORD_TOKEN4"
+        "grok4_agent": "DISCORD_TOKEN_GROK4",
+        "claude_agent": "DISCORD_TOKEN_CLAUDE", 
+        "gemini_agent": "DISCORD_TOKEN_GEMINI",
+        "o3_agent": "DISCORD_TOKEN_OPENAI"
     }
     
-    # API key mapping
+    # API key mapping (standardized naming)
     api_key_map = {
         "grok4_agent": "XAI_API_KEY",
         "claude_agent": "ANTHROPIC_API_KEY",
-        "gemini_agent": "GOOGLE_AI_API_KEY", 
+        "gemini_agent": "GEMINI_API_KEY", 
         "o3_agent": "OPENAI_API_KEY"
     }
     
