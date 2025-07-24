@@ -37,6 +37,9 @@ except ImportError:
 from dotenv import load_dotenv
 load_dotenv()
 
+# Import manager for team and config access
+from superagent_manager import SuperAgentManager
+
 class SuperAgentDashboard:
     """Beautiful CLI dashboard for SuperAgent monitoring"""
     
@@ -47,6 +50,9 @@ class SuperAgentDashboard:
         self.logs_dir = Path("logs")
         self.agents_status = {}
         self.last_update = datetime.now()
+        
+        # Initialize manager for teams and config access
+        self.manager = SuperAgentManager()
         
         # Initialize Docker client
         try:
@@ -395,6 +401,98 @@ class SuperAgentDashboard:
             box=ROUNDED
         )
     
+    def create_teams_panel(self) -> Panel:
+        """Create teams configuration panel"""
+        try:
+            teams = self.manager.list_teams()
+            if not teams:
+                return Panel(
+                    "[yellow]No teams configured[/yellow]",
+                    title="[bold cyan]Teams[/bold cyan]",
+                    border_style="cyan",
+                    box=ROUNDED
+                )
+            
+            table = Table(show_header=True, box=None)
+            table.add_column("Team", style="cyan")
+            table.add_column("Agents", style="green")
+            table.add_column("Server", style="blue")
+            table.add_column("Status", style="yellow")
+            
+            for team_name, team_info in teams.items():
+                agents_str = ", ".join(team_info.get('agents', []))
+                if len(agents_str) > 20:
+                    agents_str = agents_str[:17] + "..."
+                
+                server_id = team_info.get('default_server_id', 'N/A')
+                if len(server_id) > 15:
+                    server_id = server_id[:12] + "..."
+                
+                auto_deploy = "🟢 Auto" if team_info.get('auto_deploy') else "🔴 Manual"
+                
+                table.add_row(
+                    team_name,
+                    agents_str,
+                    server_id,
+                    auto_deploy
+                )
+            
+            return Panel(
+                table,
+                title="[bold cyan]Teams Configuration[/bold cyan]",
+                border_style="cyan",
+                box=ROUNDED
+            )
+        except Exception as e:
+            return Panel(
+                f"[red]Error loading teams: {e}[/red]",
+                title="[bold cyan]Teams[/bold cyan]",
+                border_style="cyan",
+                box=ROUNDED
+            )
+    
+    def create_configs_panel(self) -> Panel:
+        """Create agent configurations panel"""
+        try:
+            configs = self.manager.show_agent_configs()
+            if not configs:
+                return Panel(
+                    "[yellow]No agent configs found[/yellow]",
+                    title="[bold magenta]Agent Configs[/bold magenta]",
+                    border_style="magenta",
+                    box=ROUNDED
+                )
+            
+            content = []
+            for line in configs.split('\n')[:8]:  # Show first 8 lines
+                if line.strip():
+                    # Color code the line based on content
+                    if "Agent:" in line:
+                        content.append(f"[bold cyan]{line}[/bold cyan]")
+                    elif "LLM:" in line:
+                        content.append(f"[green]{line}[/green]")
+                    elif "Max Context:" in line or "Max Turns:" in line:
+                        content.append(f"[yellow]{line}[/yellow]")
+                    else:
+                        content.append(line)
+            
+            if len(configs.split('\n')) > 8:
+                content.append("[dim]... (truncated)[/dim]")
+            
+            return Panel(
+                "\n".join(content),
+                title="[bold magenta]Agent Configs[/bold magenta]",
+                border_style="magenta",
+                box=ROUNDED
+            )
+        except Exception as e:
+            return Panel(
+                f"[red]Error loading configs: {e}[/red]",
+                title="[bold magenta]Agent Configs[/bold magenta]",
+                border_style="magenta",
+                box=ROUNDED
+            )
+    
     def create_header(self) -> Panel:
         """Create dashboard header"""
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -420,12 +518,13 @@ class SuperAgentDashboard:
         layout.split_column(
             Layout(self.create_header(), size=3, name="header"),
             Layout(name="main"),
-            Layout(self.create_logs_panel(), size=12, name="logs")
+            Layout(name="bottom")
         )
         
         # Split main section into columns
         layout["main"].split_row(
             Layout(name="left"),
+            Layout(name="center"),
             Layout(name="right")
         )
         
@@ -435,10 +534,21 @@ class SuperAgentDashboard:
             Layout(self.create_postgres_panel(), name="postgres")
         )
         
-        # Split right column  
-        layout["right"].split_column(
+        # Split center column
+        layout["center"].split_column(
             Layout(self.create_agents_panel(), name="agents"),
             Layout(self.create_containers_panel(), name="containers")
+        )
+        
+        # Split right column for teams and configs
+        layout["right"].split_column(
+            Layout(self.create_teams_panel(), name="teams"),
+            Layout(self.create_configs_panel(), name="configs")
+        )
+        
+        # Bottom section for logs
+        layout["bottom"].split_column(
+            Layout(self.create_logs_panel(), size=12, name="logs")
         )
         
         return layout
@@ -450,6 +560,8 @@ class SuperAgentDashboard:
         layout["postgres"].update(self.create_postgres_panel())
         layout["agents"].update(self.create_agents_panel())
         layout["containers"].update(self.create_containers_panel())
+        layout["teams"].update(self.create_teams_panel())
+        layout["configs"].update(self.create_configs_panel())
         layout["logs"].update(self.create_logs_panel())
     
     async def run(self, refresh_interval: float = 2.0):
