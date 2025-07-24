@@ -1,0 +1,157 @@
+{
+  "discord_token_env": "DISCORD_TOKEN_DEVOPS",
+  "personality": "Expert DevOps engineer with deep knowledge of containerization, system administration, and AI agent orchestration. Proactive problem-solver who thinks autonomously about infrastructure optimization.",
+  "claude_model": "claude-3-5-sonnet-20241022",
+  "health_check_interval": 60,
+  "auto_recovery": true,
+  "max_agents": 20,
+  "resource_limits": {
+    "cpu_percent_warning": 80,
+    "memory_percent_warning": 85,
+    "disk_percent_warning": 90
+  },
+  "agent_templates": {
+    "grok4": {
+      "image": "superagent/claude-code:latest",
+      "environment": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN_GROK}",
+        "AGENT_TYPE": "grok4",
+        "AGENT_PERSONALITY": "Research expert focused on analysis and detailed explanations"
+      },
+      "volumes": {
+        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+      },
+      "labels": {
+        "superagent.type": "grok4",
+        "superagent.managed": "true"
+      },
+      "capabilities": ["research", "analysis", "web_search", "data_processing"]
+    },
+    "claude": {
+      "image": "superagent/claude-code:latest", 
+      "environment": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN2}",
+        "AGENT_TYPE": "claude",
+        "AGENT_PERSONALITY": "Code development expert focused on writing, debugging, and system architecture"
+      },
+      "volumes": {
+        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+      },
+      "labels": {
+        "superagent.type": "claude",
+        "superagent.managed": "true"
+      },
+      "capabilities": ["coding", "debugging", "architecture", "documentation"]
+    },
+    "gemini": {
+      "image": "superagent/claude-code:latest",
+      "environment": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN3}",
+        "AGENT_TYPE": "gemini", 
+        "AGENT_PERSONALITY": "Creative specialist focused on multimodal analysis and innovative solutions"
+      },
+      "volumes": {
+        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+      },
+      "labels": {
+        "superagent.type": "gemini",
+        "superagent.managed": "true"
+      },
+      "capabilities": ["creativity", "multimodal", "innovation", "collaboration"]
+    },
+    "manager": {
+      "image": "superagent/claude-code:latest",
+      "environment": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN_MANAGER:-${DISCORD_TOKEN_GROK}}",
+        "AGENT_TYPE": "manager",
+        "AGENT_PERSONALITY": "Team coordinator focused on task assignment, project management, and workflow optimization"
+      },
+      "volumes": {
+        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+      },
+      "labels": {
+        "superagent.type": "manager",
+        "superagent.managed": "true"
+      },
+      "capabilities": ["coordination", "planning", "task_assignment", "progress_tracking"]
+    },
+    "fullstack": {
+      "image": "superagent/claude-code:latest",
+      "environment": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN_FULLSTACK:-${DISCORD_TOKEN2}}",
+        "AGENT_TYPE": "fullstack",
+        "AGENT_PERSONALITY": "Full-stack development specialist with expertise in frontend, backend, and deployment"
+      },
+      "volumes": {
+        "/workspace": "${WORKSPACE_PATH:-/Users/greg/repos/SuperAgent}"
+      },
+      "labels": {
+        "superagent.type": "fullstack",
+        "superagent.managed": "true"
+      },
+      "capabilities": ["frontend", "backend", "databases", "deployment", "testing"]
+    }
+  },
+  "default_team_compositions": {
+    "crypto-tax": {
+      "description": "Cryptocurrency tax analysis and compliance team",
+      "agents": [
+        {"type": "manager", "role": "coordinator"},
+        {"type": "grok4", "role": "researcher"},
+        {"type": "claude", "role": "developer"}
+      ]
+    },
+    "development": {
+      "description": "General software development team",
+      "agents": [
+        {"type": "manager", "role": "project_manager"},
+        {"type": "fullstack", "role": "lead_developer"},
+        {"type": "claude", "role": "backend_specialist"},
+        {"type": "gemini", "role": "ui_specialist"}
+      ]
+    },
+    "research": {
+      "description": "Research and analysis team",
+      "agents": [
+        {"type": "grok4", "role": "lead_researcher"},
+        {"type": "claude", "role": "technical_writer"},
+        {"type": "gemini", "role": "creative_analyst"}
+      ]
+    }
+  },
+  "security": {
+    "allowed_commands": [
+      "deploy", "stop", "restart", "logs", "status", "health",
+      "team", "config", "scale", "monitor"
+    ],
+    "restricted_commands": [
+      "rm", "delete", "destroy", "format", "kill -9"
+    ],
+    "require_confirmation": [
+      "stop_all", "restart_all", "delete_team", "destroy_containers"
+    ]
+  },
+  "monitoring": {
+    "alert_thresholds": {
+      "cpu_percent": 90,
+      "memory_percent": 95,
+      "disk_percent": 95,
+      "error_rate": 5,
+      "response_time_ms": 5000
+    },
+    "metrics_retention_days": 30,
+    "log_retention_days": 7
+  },
+  "ai_behavior": {
+    "proactive_suggestions": true,
+    "auto_optimization": false,
+    "learning_mode": true,
+    "context_memory_messages": 50,
+    "decision_confidence_threshold": 0.8
+  }
+}

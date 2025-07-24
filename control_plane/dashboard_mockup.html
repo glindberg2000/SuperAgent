@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperAgent Control Center</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: #1a1a1a;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 1rem;
+        }
+        
+        .status-ok { background: #4ade80; }
+        .status-warning { background: #fbbf24; }
+        .status-error { background: #ef4444; }
+        
+        .container {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: transform 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: #4ade80;
+        }
+        
+        .card h3 {
+            margin-bottom: 1rem;
+            color: #4ade80;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .agent-card {
+            position: relative;
+        }
+        
+        .agent-status {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .metric-label {
+            color: #888;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #333;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #1a1a1a;
+            border-color: #4ade80;
+        }
+        
+        .btn-primary {
+            background: #4ade80;
+            color: #0a0a0a;
+            border-color: #4ade80;
+        }
+        
+        .btn-primary:hover {
+            background: #22c55e;
+        }
+        
+        .btn-danger {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+        
+        .team-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .team-card {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+        }
+        
+        .team-members {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        
+        .activity-log {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #222;
+            font-size: 0.9rem;
+        }
+        
+        .log-time {
+            color: #666;
+            font-family: monospace;
+        }
+        
+        .log-message {
+            margin-left: 1rem;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #4ade80;
+            color: #0a0a0a;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s;
+        }
+        
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>
+            🤖 SuperAgent Control Center
+            <span class="status-indicator status-ok"></span>
+        </h1>
+        <div>
+            <span style="color: #4ade80;">System: Operational</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Active Agents Section -->
+        <h2 style="margin-bottom: 1rem;">Active Agents (4/10)</h2>
+        <div class="grid">
+            <!-- DevOps Agent -->
+            <div class="card agent-card">
+                <span class="agent-status status-ok"></span>
+                <h3>🛠️ DevOpsAgent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Host Process</p>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-label">Status:</span>
+                        <span style="color: #4ade80;">Active</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Uptime:</span>
+                        <span>2h 15m</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Health:</span>
+                        <span>100%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Mode:</span>
+                        <span>Host</span>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="btn">View Logs</button>
+                    <button class="btn">Config</button>
+                </div>
+            </div>
+
+            <!-- Grok4 Agent -->
+            <div class="card agent-card">
+                <span class="agent-status status-ok"></span>
+                <h3>🔍 Grok4Agent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Research & Analysis</p>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-label">Status:</span>
+                        <span style="color: #4ade80;">Running</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Container:</span>
+                        <span>grok4-x23</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">CPU:</span>
+                        <span>12%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Memory:</span>
+                        <span>256MB</span>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="btn">View Logs</button>
+                    <button class="btn">Shell</button>
+                    <button class="btn btn-danger">Stop</button>
+                </div>
+            </div>
+
+            <!-- Claude Agent -->
+            <div class="card agent-card">
+                <span class="agent-status status-ok"></span>
+                <h3>💻 ClaudeAgent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Code & Development</p>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-label">Status:</span>
+                        <span style="color: #4ade80;">Running</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Container:</span>
+                        <span>claude-a1</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">CPU:</span>
+                        <span>18%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Memory:</span>
+                        <span>384MB</span>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="btn">View Logs</button>
+                    <button class="btn">Shell</button>
+                    <button class="btn btn-danger">Stop</button>
+                </div>
+            </div>
+
+            <!-- Manager Agent -->
+            <div class="card agent-card">
+                <span class="agent-status status-ok"></span>
+                <h3>👔 Manager</h3>
+                <p style="color: #888; font-size: 0.9rem;">Team Coordination</p>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-label">Status:</span>
+                        <span style="color: #4ade80;">Running</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Container:</span>
+                        <span>manager-b2</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">CPU:</span>
+                        <span>8%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Memory:</span>
+                        <span>192MB</span>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="btn">View Logs</button>
+                    <button class="btn">Shell</button>
+                    <button class="btn btn-danger">Stop</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available Agents -->
+        <h2 style="margin: 2rem 0 1rem;">Available for Deployment</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>🌟 GeminiAgent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Creative & Multimodal</p>
+                <button class="btn btn-primary" style="margin-top: 1rem;">Deploy</button>
+            </div>
+            <div class="card">
+                <h3>🧠 o3Agent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Advanced Reasoning</p>
+                <button class="btn btn-primary" style="margin-top: 1rem;">Deploy</button>
+            </div>
+            <div class="card">
+                <h3>🏗️ FullStackAgent</h3>
+                <p style="color: #888; font-size: 0.9rem;">Full Stack Development</p>
+                <button class="btn btn-primary" style="margin-top: 1rem;">Deploy</button>
+            </div>
+        </div>
+
+        <!-- Teams Section -->
+        <div class="team-section">
+            <h2>Active Teams</h2>
+            <div class="team-grid">
+                <div class="team-card">
+                    <h4 style="color: #4ade80;">CryptoTax Team</h4>
+                    <p class="team-members">
+                        Manager, Grok4Agent, ClaudeAgent
+                    </p>
+                    <p style="color: #666; font-size: 0.8rem; margin-top: 0.5rem;">
+                        Status: Working on transaction analysis
+                    </p>
+                </div>
+                <div class="team-card">
+                    <h4 style="color: #888;">Development Team</h4>
+                    <p class="team-members">
+                        No agents assigned
+                    </p>
+                    <button class="btn" style="margin-top: 0.5rem; font-size: 0.8rem;">
+                        Assign Agents
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Log -->
+        <h2 style="margin: 2rem 0 1rem;">Recent Activity</h2>
+        <div class="activity-log">
+            <div class="log-entry">
+                <span class="log-time">10:45:23</span>
+                <span class="log-message">Manager assigned task to Grok4Agent: "Analyze DeFi transactions"</span>
+            </div>
+            <div class="log-entry">
+                <span class="log-time">10:44:15</span>
+                <span class="log-message">ClaudeAgent completed code review for tax calculator</span>
+            </div>
+            <div class="log-entry">
+                <span class="log-time">10:42:30</span>
+                <span class="log-message">DevOps spawned ClaudeAgent container (claude-a1)</span>
+            </div>
+            <div class="log-entry">
+                <span class="log-time">10:40:12</span>
+                <span class="log-message">System health check: All services operational</span>
+            </div>
+            <div class="log-entry">
+                <span class="log-time">10:38:45</span>
+                <span class="log-message">Grok4Agent started research on 2024 tax regulations</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <div class="controls">
+        <button class="fab" title="Deploy New Agent">+</button>
+        <button class="fab" style="background: #ef4444;" title="Emergency Stop All">⏹</button>
+    </div>
+
+    <script>
+        // Simulated real-time updates
+        setInterval(() => {
+            // Update CPU/Memory metrics
+            document.querySelectorAll('.metric').forEach(metric => {
+                if (metric.textContent.includes('CPU:')) {
+                    const cpu = Math.floor(Math.random() * 30) + 5;
+                    metric.innerHTML = `<span class="metric-label">CPU:</span><span>${cpu}%</span>`;
+                }
+                if (metric.textContent.includes('Memory:')) {
+                    const mem = Math.floor(Math.random() * 200) + 150;
+                    metric.innerHTML = `<span class="metric-label">Memory:</span><span>${mem}MB</span>`;
+                }
+            });
+        }, 3000);
+
+        // Add click handlers
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                console.log('Button clicked:', e.target.textContent);
+                // In real app, this would trigger API calls
+            });
+        });
+    </script>
+</body>
+</html>
