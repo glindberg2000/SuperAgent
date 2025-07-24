@@ -1,0 +1,31 @@
+{
+  "name": "Official Claude Code - SuperAgent",
+  "build": {
+    "dockerfile": "../official-claude-container/Dockerfile",
+    "context": ".."
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/mcp-discord,target=/home/node/mcp-discord,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/claude_mcp_config.json,target=/home/node/.claude/project_mcp_servers.json,type=bind,consistency=cached"
+  ],
+  "containerEnv": {
+    "DISCORD_TOKEN": "${localEnv:DISCORD_TOKEN_GROK}",
+    "DEFAULT_SERVER_ID": "${localEnv:DEFAULT_SERVER_ID}"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.shell.linux": "/usr/bin/zsh"
+      }
+    }
+  },
+  "postCreateCommand": [
+    "sudo chown -R node:node /home/node/.claude",
+    "echo 'Claude Code container ready. Run \"claude\" to start.'"
+  ],
+  "remoteUser": "node",
+  "workspaceFolder": "/home/node/workspace"
+}

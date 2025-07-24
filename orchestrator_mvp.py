@@ -145,13 +145,44 @@ class MVPOrchestrator:
             workspace_path: {"bind": "/workspace", "mode": "rw"},
         }
         
-        # Mount MCP client configuration for Claude Code
-        mcp_config_path = os.path.join(os.path.dirname(__file__), "docker", "mcp_client_config.json")
-        if os.path.exists(mcp_config_path):
-            volumes[mcp_config_path] = {"bind": "/root/.config/claude/mcp_servers.json", "mode": "ro"}
-            logger.info("   ✅ MCP Discord client configuration mounted")
+        # Mount mcp-discord volume and create agent-specific MCP config
+        mcp_discord_path = os.path.join(os.path.dirname(__file__), "mcp-discord")
+        if os.path.exists(mcp_discord_path):
+            volumes[mcp_discord_path] = {"bind": "/mcp-discord", "mode": "ro"}
+            logger.info("   ✅ mcp-discord volume mounted")
+            
+            # Create agent-specific MCP config
+            agent_mcp_config = {
+                "mcpServers": {
+                    "discord": {
+                        "command": "python",
+                        "args": [
+                            "/mcp-discord/src/discord_mcp/server.py",
+                            "--token", discord_token,
+                            "--server-id", os.getenv("DEFAULT_SERVER_ID", "1299165799977291887")
+                        ],
+                        "env": {
+                            "DISCORD_TOKEN": discord_token,
+                            "DEFAULT_SERVER_ID": os.getenv("DEFAULT_SERVER_ID", "1299165799977291887")
+                        }
+                    }
+                }
+            }
+            
+            # Write config to a temporary location that will be mounted
+            import tempfile
+            import json
+            config_dir = os.path.join(os.path.dirname(__file__), "temp_configs")
+            os.makedirs(config_dir, exist_ok=True)
+            agent_config_file = os.path.join(config_dir, f"{name}_mcp_config.json")
+            
+            with open(agent_config_file, 'w') as f:
+                json.dump(agent_mcp_config, f, indent=2)
+            
+            volumes[agent_config_file] = {"bind": "/home/coder/.claude.json", "mode": "ro"}
+            logger.info(f"   ✅ Agent-specific MCP config created for {name}")
         else:
-            logger.warning("   ⚠️ MCP client configuration not found - Discord MCP tools may not be available")
+            logger.warning("   ⚠️ mcp-discord directory not found - Discord MCP tools will not be available")
         
         # Add SSH keys if they exist
         ssh_path = Path.home() / ".ssh"

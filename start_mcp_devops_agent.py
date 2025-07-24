@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-SuperAgent DevOps Agent Startup Script
-Easy launcher for the AI-powered DevOps agent with environment validation
+MCP DevOps Agent Startup Script
+Launcher for the MCP-based AI DevOps agent with environment validation
 """
 
 import os
 import sys
 import asyncio
-import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -45,14 +44,16 @@ def check_dependencies():
     
     try:
         import anthropic
-        import discord
         import docker
         import psutil
-        print("✅ Core dependencies available")
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        print("✅ Core dependencies and MCP available")
         return True
     except ImportError as e:
         print(f"❌ Missing dependency: {e}")
         print("Install with: pip install -r control_plane/requirements.txt")
+        print("Also ensure MCP client is installed: pip install mcp")
         return False
 
 def check_docker():
@@ -70,28 +71,41 @@ def check_docker():
         print("Agent will run with limited container management capabilities")
         return False
 
+def check_mcp_config():
+    """Check MCP configuration exists"""
+    print("🔍 Checking MCP configuration...")
+    
+    mcp_config_path = Path(__file__).parent / "mcp.json"
+    if mcp_config_path.exists():
+        print("✅ MCP configuration found")
+        return True
+    else:
+        print("⚠️ MCP configuration not found at mcp.json")
+        print("Agent will use fallback MCP configuration")
+        return False
+
 def create_directories():
     """Create required directories"""
-    dirs = ['logs', 'configs']
+    dirs = ['logs', 'data', 'configs']
     for dir_path in dirs:
         os.makedirs(dir_path, exist_ok=True)
     print("✅ Required directories created")
 
 async def start_agent():
-    """Start the AI DevOps Agent"""
-    print("🚀 Starting AI DevOps Agent...")
+    """Start the MCP DevOps Agent"""
+    print("🚀 Starting MCP DevOps Agent...")
     
     # Add control_plane to Python path
     sys.path.insert(0, str(Path(__file__).parent / 'control_plane'))
     
     try:
-        from ai_devops_agent import AIDevOpsAgent
+        from mcp_devops_agent import MCPDevOpsAgent
         
-        agent = AIDevOpsAgent()
+        agent = MCPDevOpsAgent()
         await agent.start()
         
     except KeyboardInterrupt:
-        print("\n👋 Shutting down AI DevOps Agent...")
+        print("\n👋 Shutting down MCP DevOps Agent...")
     except Exception as e:
         print(f"❌ Failed to start agent: {e}")
         import traceback
@@ -100,8 +114,8 @@ async def start_agent():
 
 def main():
     """Main startup routine"""
-    print("🤖 SuperAgent DevOps Agent Startup")
-    print("=" * 40)
+    print("🤖 SuperAgent MCP DevOps Agent Startup")
+    print("=" * 45)
     
     # Environment checks
     if not check_environment():
@@ -111,11 +125,13 @@ def main():
         sys.exit(1)
     
     check_docker()  # Non-blocking check
+    check_mcp_config()  # Non-blocking check
     
     # Setup
     create_directories()
     
-    print("\n🎯 All checks passed! Starting agent...")
+    print("\n🎯 All checks passed! Starting MCP agent...")
+    print("The agent will connect to Discord via MCP for consistency")
     print("Press Ctrl+C to stop\n")
     
     # Start the agent

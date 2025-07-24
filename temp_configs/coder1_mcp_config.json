@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "discord": {
+      "command": "python",
+      "args": [
+        "-m",
+        "src.discord_mcp.server",
+        "--token",
+        ""YOUR_TOKEN_HERE"",
+        "--server-id",
+        "1299165799977291887"
+      ],
+      "env": {
+        "DISCORD_TOKEN": ""YOUR_TOKEN_HERE"",
+        "DEFAULT_SERVER_ID": "1299165799977291887"
+      },
+      "cwd": "/mcp-discord"
+    }
+  }
+}

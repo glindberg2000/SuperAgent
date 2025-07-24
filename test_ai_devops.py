@@ -9,6 +9,10 @@ import os
 import sys
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 # Add control_plane to path
 sys.path.append(str(Path(__file__).parent / 'control_plane'))
