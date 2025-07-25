@@ -169,15 +169,32 @@ configure_container() {
     
     print_status "Configuring container $container_name"
     
-    # Add MCP server using the documented working method
-    print_status "Adding MCP Discord server..."
+    # CRITICAL: Wait for Claude Code to initialize properly
+    print_status "Waiting for Claude Code initialization..."
+    sleep 5
+    
+    # CRITICAL: Preserve Claude Code authentication by getting existing config
+    print_status "Preserving Claude Code authentication..."
+    docker exec "$container_name" claude --version > /dev/null 2>&1 || {
+        print_error "Claude Code not properly initialized in container"
+        return 1
+    }
+    
+    # Create critical __main__.py file FIRST
+    docker exec "$container_name" sh -c 'echo "from discord_mcp import main; main()" > /home/node/mcp-discord/src/discord_mcp/__main__.py'
+    
+    # CRITICAL FIX: Use claude mcp add to preserve authentication instead of overwriting config
+    print_status "Adding MCP Discord server (preserving authentication)..."
     docker exec "$container_name" bash -c "
         export PYTHONPATH=/home/node/mcp-discord/src
+        # Remove any existing discord server config
+        claude mcp remove discord-isolated 2>/dev/null || true
+        # Add MCP server while preserving Claude Code authentication
         claude mcp add discord-isolated stdio -- python3 -m discord_mcp --token '$DISCORD_TOKEN_CLAUDE' --server-id '$DEFAULT_SERVER_ID'
-    "
-    
-    # Create critical __main__.py file
-    docker exec "$container_name" sh -c 'echo "from discord_mcp import main; main()" > /home/node/mcp-discord/src/discord_mcp/__main__.py'
+    " || {
+        print_error "Failed to configure MCP server"
+        return 1
+    }
     
     # Test Claude authentication
     print_status "Testing Claude Code authentication..."

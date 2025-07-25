@@ -73,37 +73,57 @@ class DevOpsClaudeManager:
         except Exception as e:
             return {"status": "error", "message": f"Failed to get status: {str(e)}"}
     
-    def start_working_container(self) -> Dict[str, Any]:
-        """Start the verified working Claude container - DevOps callable"""
+    def start_working_container(self, prefer_isolated: bool = True) -> Dict[str, Any]:
+        """Start the best available Claude container - DevOps callable"""
         try:
-            # First try to start existing working container
-            result = subprocess.run(
-                ["docker", "start", "claude-fullstackdev-persistent"],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            # Priority order: isolated container (proper containerization) > persistent (fallback)
+            containers_to_try = [
+                ("claude-isolated-discord", "isolated with proper containerization"),
+                ("claude-fullstackdev-persistent", "persistent with shared workspace")
+            ] if prefer_isolated else [
+                ("claude-fullstackdev-persistent", "persistent with shared workspace"), 
+                ("claude-isolated-discord", "isolated with proper containerization")
+            ]
             
-            if result.returncode == 0:
-                return {
-                    "status": "success",
-                    "action": "started_existing",
-                    "container": "claude-fullstackdev-persistent",
-                    "message": "Started existing working container"
-                }
-            
-            # If that fails, create using startup script
-            if self.startup_script.exists():
+            for container_name, description in containers_to_try:
+                # Try to start existing container
                 result = subprocess.run(
-                    [str(self.startup_script), "claude-fullstackdev-persistent"],
+                    ["docker", "start", container_name],
                     capture_output=True,
                     text=True,
-                    timeout=120
+                    timeout=30
+                )
+                
+                if result.returncode == 0:
+                    # Verify it's actually working
+                    test_result = subprocess.run([
+                        "docker", "exec", container_name, "claude", "--print", "DevOps startup test"
+                    ], capture_output=True, text=True, timeout=30)
+                    
+                    if test_result.returncode == 0:
+                        return {
+                            "status": "success",
+                            "action": "started_existing",
+                            "container": container_name,
+                            "type": description,
+                            "message": f"Started existing {description} container: {container_name}"
+                        }
+            
+            # If no existing containers work, create new isolated container
+            if self.startup_script.exists():
+                print("Creating new isolated container with proper authentication...")
+                result = subprocess.run(
+                    [str(self.startup_script), "claude-isolated-discord"],
+                    capture_output=True,
+                    text=True,
+                    timeout=180  # Longer timeout for creation
                 )
                 
                 return {
                     "status": "success" if result.returncode == 0 else "error",
-                    "action": "created_new",
+                    "action": "created_new_isolated",
+                    "container": "claude-isolated-discord",
+                    "type": "isolated with proper containerization", 
                     "output": result.stdout,
                     "error": result.stderr if result.stderr else None
                 }
@@ -115,31 +135,65 @@ class DevOpsClaudeManager:
         except Exception as e:
             return {"status": "error", "message": f"Failed to start container: {str(e)}"}
     
+    def get_active_container(self) -> Optional[str]:
+        """Get the name of the currently active/working Claude container"""
+        containers_to_check = ["claude-isolated-discord", "claude-fullstackdev-persistent"]
+        
+        for container_name in containers_to_check:
+            try:
+                # Check if container is running
+                result = subprocess.run([
+                    "docker", "inspect", container_name, "--format", "{{.State.Status}}"
+                ], capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0 and "running" in result.stdout:
+                    # Verify Claude Code works
+                    test_result = subprocess.run([
+                        "docker", "exec", container_name, "claude", "--print", "Quick test"
+                    ], capture_output=True, text=True, timeout=15)
+                    
+                    if test_result.returncode == 0:
+                        return container_name
+                        
+            except:
+                continue
+                
+        return None
+
     def test_discord_connection(self) -> Dict[str, Any]:
-        """Test Discord connection from working container - DevOps callable"""
+        """Test Discord connection from active container - DevOps callable"""
         try:
-            # Test the working container
+            # Find active container
+            container_name = self.get_active_container()
+            if not container_name:
+                return {"status": "error", "message": "No active Claude containers found"}
+            
+            # Test Discord connection
             test_message = f"🔧 DevOps test at {datetime.now().strftime('%H:%M:%S')} - Container health check"
             
             result = subprocess.run([
-                "docker", "exec", "claude-fullstackdev-persistent", "claude",
+                "docker", "exec", container_name, "claude",
                 "--dangerously-skip-permissions", 
                 "--print", f"Send this test message to Discord: '{test_message}'"
             ], capture_output=True, text=True, timeout=60)
+            
+            container_type = "isolated" if "isolated" in container_name else "persistent"
             
             if result.returncode == 0:
                 return {
                     "status": "success",
                     "message": "Discord test message sent successfully",
                     "output": result.stdout,
-                    "container": "claude-fullstackdev-persistent"
+                    "container": container_name,
+                    "container_type": container_type
                 }
             else:
                 return {
-                    "status": "error",
+                    "status": "error", 
                     "message": "Discord test failed",
                     "error": result.stderr,
-                    "output": result.stdout
+                    "output": result.stdout,
+                    "container": container_name
                 }
                 
         except subprocess.TimeoutExpired:
@@ -148,7 +202,7 @@ class DevOpsClaudeManager:
             return {"status": "error", "message": f"Test failed: {str(e)}"}
     
     def execute_claude_command(self, command: str) -> Dict[str, Any]:
-        """Execute arbitrary Claude command in working container - DevOps callable"""
+        """Execute arbitrary Claude command in active container - DevOps callable"""
         try:
             if not command:
                 return {"status": "error", "message": "No command provided"}
@@ -158,18 +212,27 @@ class DevOpsClaudeManager:
             if any(keyword in command.lower() for keyword in dangerous_keywords):
                 return {"status": "error", "message": "Command contains dangerous keywords"}
             
+            # Find active container
+            container_name = self.get_active_container()
+            if not container_name:
+                return {"status": "error", "message": "No active Claude containers found"}
+            
             result = subprocess.run([
-                "docker", "exec", "claude-fullstackdev-persistent", "claude",
+                "docker", "exec", container_name, "claude",
                 "--dangerously-skip-permissions",
                 "--print", command
             ], capture_output=True, text=True, timeout=120)
+            
+            container_type = "isolated" if "isolated" in container_name else "persistent"
             
             return {
                 "status": "success" if result.returncode == 0 else "error",
                 "output": result.stdout,
                 "error": result.stderr if result.stderr else None,
                 "return_code": result.returncode,
-                "command": command
+                "command": command,
+                "container": container_name,
+                "container_type": container_type
             }
             
         except subprocess.TimeoutExpired:
