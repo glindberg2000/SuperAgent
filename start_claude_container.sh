@@ -50,7 +50,7 @@ load_env() {
 
 # Check required environment variables
 check_env_vars() {
-    local required_vars=("DISCORD_TOKEN_CLAUDE" "DEFAULT_SERVER_ID" "ANTHROPIC_API_KEY")
+    local required_vars=("DISCORD_TOKEN_CODERDEV1" "DEFAULT_SERVER_ID")
     
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
@@ -158,9 +158,8 @@ create_container() {
     docker run -d \
         --name "$container_name" \
         --restart unless-stopped \
-        -e "DISCORD_TOKEN=$DISCORD_TOKEN_CLAUDE" \
+        -e "DISCORD_TOKEN=$DISCORD_TOKEN_CODERDEV1" \
         -e "DEFAULT_SERVER_ID=$DEFAULT_SERVER_ID" \
-        -e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
         -e "AGENT_TYPE=isolated_claude" \
         -e "AGENT_PERSONALITY=Claude Code container with isolated workspace. I am a separate bot from the SuperAgent system, operating independently for Discord-managed tasks." \
         -e "WORKSPACE_PATH=/workspace" \
@@ -242,7 +241,7 @@ configure_container() {
         # Remove any existing discord server config
         claude mcp remove discord-isolated 2>/dev/null || true
         # Add MCP server while preserving Claude Code authentication
-        claude mcp add discord-isolated stdio -- python3 -m discord_mcp --token '$DISCORD_TOKEN_CLAUDE' --server-id '$DEFAULT_SERVER_ID'
+        claude mcp add discord-isolated stdio -- python3 -m discord_mcp --token '$DISCORD_TOKEN_CODERDEV1' --server-id '$DEFAULT_SERVER_ID'
     " || {
         print_error "Failed to configure MCP server"
         return 1
@@ -317,8 +316,8 @@ save_container_info() {
     "container_name": "$container_name",
     "image": "$(docker inspect --format='{{.Config.Image}}' "$container_name")",
     "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "discord_token_env": "DISCORD_TOKEN_CLAUDE",
-    "authentication": "api_key",
+    "discord_token_env": "DISCORD_TOKEN_CODERDEV1",
+    "authentication": "subscription",
     "workspace": "$(docker inspect --format='{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' "$container_name")",
     "type": "isolated",
     "status": "created_successfully",
