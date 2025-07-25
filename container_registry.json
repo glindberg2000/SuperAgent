@@ -1,0 +1,25 @@
+{
+  "claude-fullstackdev-persistent": {
+    "container_id": "06bc6305ddebb0b40e79467b673122bb7f1901ca289268061a3b4c60616db3a1",
+    "container_name": "claude-fullstackdev-persistent",
+    "image": "superagent/official-claude-code:latest",
+    "created_at": "2025-07-24T16:30:28.713901",
+    "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+    "authentication": "api_key",
+    "workspace": "/Users/greg/repos/SuperAgent",
+    "status": "created_successfully"
+  },
+  "claude-isolated-discord": {
+    "container_id": "311a81477cb2bd62d3b02c10a73af317a082f45dba30ef579a09dba47c7c2fd6",
+    "container_name": "claude-isolated-discord",
+    "image": "superagent/official-claude-code:latest",
+    "created_at": "2025-07-25T01:11:20Z",
+    "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+    "authentication": "api_key",
+    "workspace": "/Users/greg/claude_workspaces/claude-isolated-discord",
+    "type": "isolated",
+    "status": "created_successfully",
+    "startup_script": "./start_claude_container.sh",
+    "config_file": "/Users/greg/repos/SuperAgent/claude_container_config.json"
+  }
+}

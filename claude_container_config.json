@@ -1,0 +1,69 @@
+{
+  "containers": {
+    "claude-isolated-discord": {
+      "name": "claude-isolated-discord",
+      "image": "superagent/official-claude-code:latest",
+      "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+      "workspace_type": "isolated",
+      "workspace_path": "~/claude_workspaces/claude-isolated-discord",
+      "agent_personality": "Claude Code container with isolated workspace. I am a separate bot from the SuperAgent system, operating independently for Discord-managed tasks.",
+      "auto_checkin": true,
+      "persistent_monitoring": true,
+      "mcp_server_name": "discord-isolated",
+      "restart_policy": "unless-stopped",
+      "labels": {
+        "superagent.type": "claude-code-isolated",
+        "superagent.agent": "discord-managed",
+        "superagent.team": "autonomous",
+        "superagent.managed": "discord",
+        "superagent.workspace": "isolated"
+      }
+    },
+    "claude-fullstackdev-persistent": {
+      "name": "claude-fullstackdev-persistent",
+      "image": "superagent/official-claude-code:latest",
+      "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+      "workspace_type": "shared",
+      "workspace_path": "/Users/greg/repos/SuperAgent",
+      "agent_personality": "Full-stack developer specializing in Python, Docker, system architecture, and SuperAgent development. Expert in containerization and multi-agent systems.",
+      "auto_checkin": false,
+      "persistent_monitoring": false,
+      "mcp_server_name": "discord-fullstackdev",
+      "restart_policy": "unless-stopped",
+      "labels": {
+        "superagent.type": "claude-code",
+        "superagent.agent": "fullstackdev",
+        "superagent.team": "development",
+        "superagent.managed": "true",
+        "superagent.persistent": "true"
+      }
+    }
+  },
+  "startup_scripts": {
+    "discord_manager": "/workspace/discord_claude_manager.py",
+    "auto_checkin": true,
+    "monitoring_interval": 30,
+    "checkin_interval": 7200
+  },
+  "required_env_vars": [
+    "DISCORD_TOKEN_CLAUDE",
+    "DEFAULT_SERVER_ID",
+    "ANTHROPIC_API_KEY"
+  ],
+  "mcp_config_template": {
+    "mcpServers": {
+      "{mcp_server_name}": {
+        "type": "stdio",
+        "command": "python3",
+        "args": [
+          "-m", "discord_mcp",
+          "--token", "{discord_token}",
+          "--server-id", "{server_id}"
+        ],
+        "env": {
+          "PYTHONPATH": "/home/node/mcp-discord/src"
+        }
+      }
+    }
+  }
+}

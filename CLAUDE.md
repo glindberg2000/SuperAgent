@@ -202,3 +202,11 @@ The system uses MCP to connect to Discord via the `mcp-discord-global` package. 
 - Uses async MCP client for reliable Discord communication
 - Server info is returned as text, not JSON (parsed manually)
 - Currently targets #general channel, but can be configured
+
+## 🎉 WORKING Claude Code Discord MCP Setup
+**SEE:** `CLAUDE_CODE_DISCORD_MCP_WORKING_SETUP.md` for complete working configuration
+
+- ✅ Container: `claude-fullstackdev-persistent` 
+- ✅ Discord Bot: `CryptoTax_CoderDev1`
+- ✅ MCP Connection: Working with `✓ Connected` status
+- ✅ Critical Fix: `__main__.py` file required in `discord_mcp` package
