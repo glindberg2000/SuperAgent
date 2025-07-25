@@ -33,11 +33,30 @@ class ContainerServer:
     def _init_docker(self) -> Optional[docker.DockerClient]:
         """Initialize Docker client"""
         try:
-            client = docker.from_env()
-            client.ping()
-            return client
+            # Try different Docker socket locations
+            docker_hosts = [
+                "unix:///Users/greg/.colima/default/docker.sock",
+                "unix:///var/run/docker.sock",
+                None  # Default from environment
+            ]
+            
+            for host in docker_hosts:
+                try:
+                    if host:
+                        client = docker.DockerClient(base_url=host)
+                    else:
+                        client = docker.from_env()
+                    client.ping()
+                    logger.info(f"✅ Connected to Docker at {host or 'default'}")
+                    return client
+                except Exception as e:
+                    logger.debug(f"Failed to connect to Docker at {host}: {e}")
+                    continue
+                    
+            logger.warning("⚠️ Could not connect to Docker - container operations will be limited")
+            return None
         except Exception as e:
-            logger.error(f"Failed to connect to Docker: {e}")
+            logger.error(f"Failed to initialize Docker client: {e}")
             return None
             
     def _setup_tools(self):
@@ -316,7 +335,7 @@ class ContainerServer:
             await self.server.run(
                 read_stream,
                 write_stream,
-                self.server._get_capabilities()
+                self.server.create_initialization_options()
             )
 
 

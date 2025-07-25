@@ -47,8 +47,12 @@ class MCPContainerTestClient:
                     logger.info("✅ Connected to MCP container server")
                     
                     # List available tools
-                    tools = await session.list_tools()
-                    logger.info(f"📋 Available tools: {[tool.name for tool in tools]}")
+                    tools_response = await session.list_tools()
+                    if hasattr(tools_response, 'tools'):
+                        tools = tools_response.tools
+                        logger.info(f"📋 Available tools: {[tool.name for tool in tools]}")
+                    else:
+                        logger.info(f"📋 Tools response: {tools_response}")
                     
                     # Run test suite
                     await self._test_list_containers(session)

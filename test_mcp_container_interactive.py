@@ -233,7 +233,8 @@ class InteractiveMCPClient:
     async def list_tools(self, args):
         """List available MCP tools"""
         print("\n🔧 Available MCP Tools:")
-        tools = await self.session.list_tools()
+        tools_response = await self.session.list_tools()
+        tools = tools_response.tools if hasattr(tools_response, 'tools') else tools_response
         for tool in tools:
             print(f"\n  📌 {tool.name}")
             print(f"     {tool.description}")
