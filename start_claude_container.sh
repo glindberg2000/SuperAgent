@@ -136,6 +136,24 @@ create_container() {
         exit 1
     fi
     
+    # Set up SSH key mounting for Git access
+    local ssh_dir="$HOME/.ssh"
+    local git_config="$HOME/.gitconfig"
+    
+    # Build volume mounts
+    local volume_mounts=(
+        "-v" "${workspace_path}:/workspace"
+        "-v" "${mcp_discord_path}:/home/node/mcp-discord"
+    )
+    
+    # Note: SSH keys will be copied after container creation for proper permissions
+    
+    # Add Git config if it exists
+    if [[ -f "$git_config" ]]; then
+        volume_mounts+=("-v" "${git_config}:/home/node/.gitconfig:ro")
+        print_status "Mounting Git configuration"
+    fi
+    
     # Create container
     docker run -d \
         --name "$container_name" \
@@ -146,8 +164,7 @@ create_container() {
         -e "AGENT_TYPE=isolated_claude" \
         -e "AGENT_PERSONALITY=Claude Code container with isolated workspace. I am a separate bot from the SuperAgent system, operating independently for Discord-managed tasks." \
         -e "WORKSPACE_PATH=/workspace" \
-        -v "${workspace_path}:/workspace" \
-        -v "${mcp_discord_path}:/home/node/mcp-discord" \
+        "${volume_mounts[@]}" \
         -w "/workspace" \
         --label "superagent.type=claude-code-isolated" \
         --label "superagent.agent=discord-managed" \
@@ -182,6 +199,41 @@ configure_container() {
     
     # Create critical __main__.py file FIRST
     docker exec "$container_name" sh -c 'echo "from discord_mcp import main; main()" > /home/node/mcp-discord/src/discord_mcp/__main__.py'
+    
+    # Copy SSH keys for Git access with proper permissions
+    print_status "Setting up Git SSH access..."
+    local ssh_dir="$HOME/.ssh"
+    if [[ -d "$ssh_dir" ]]; then
+        docker exec "$container_name" bash -c "
+            # Copy SSH keys to container
+            mkdir -p /home/node/.ssh_temp
+            cp -r $ssh_dir/* /home/node/.ssh_temp/ 2>/dev/null || true
+            
+            # Set proper permissions
+            chmod 700 /home/node/.ssh_temp
+            chmod 600 /home/node/.ssh_temp/id_* 2>/dev/null || true
+            chmod 600 /home/node/.ssh_temp/config 2>/dev/null || true
+            chmod 644 /home/node/.ssh_temp/*.pub 2>/dev/null || true
+            chown -R node:node /home/node/.ssh_temp
+            
+            # Replace mounted read-only directory
+            rm -rf /home/node/.ssh
+            mv /home/node/.ssh_temp /home/node/.ssh
+        "
+        docker cp "$ssh_dir" "$container_name:/home/node/.ssh_host"
+        docker exec "$container_name" bash -c "
+            rm -rf /home/node/.ssh
+            mv /home/node/.ssh_host /home/node/.ssh
+            chmod 700 /home/node/.ssh
+            chmod 600 /home/node/.ssh/id_* 2>/dev/null || true
+            chmod 600 /home/node/.ssh/config 2>/dev/null || true  
+            chmod 644 /home/node/.ssh/*.pub 2>/dev/null || true
+            chown -R node:node /home/node/.ssh
+        "
+        print_success "SSH keys configured for Git access"
+    else
+        print_warning "SSH directory not found - Git operations may not work"
+    fi
     
     # CRITICAL FIX: Use claude mcp add to preserve authentication instead of overwriting config
     print_status "Adding MCP Discord server (preserving authentication)..."

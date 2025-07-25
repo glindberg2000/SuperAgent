@@ -39,7 +39,7 @@ volumes = {
 
 ### Environment Variables
 ```bash
-DISCORD_TOKEN="YOUR_TOKEN_HERE"
+DISCORD_TOKEN=YOUR_TOKEN_HERE
 DEFAULT_SERVER_ID=1395578178973597799
 ANTHROPIC_API_KEY=""sk-ant-api03-YOUR_ANTHROPIC_KEY_HERE""
 ```
@@ -50,7 +50,7 @@ ANTHROPIC_API_KEY=""sk-ant-api03-YOUR_ANTHROPIC_KEY_HERE""
 ```bash
 # Inside container
 claude mcp add discord-fullstackdev stdio -- python3 -m discord_mcp \
-  --token ""YOUR_TOKEN_HERE"" \
+  --token "YOUR_TOKEN_HERE" \
   --server-id "1395578178973597799"
 ```
 
@@ -65,7 +65,7 @@ claude mcp add discord-fullstackdev stdio -- python3 -m discord_mcp \
           "command": "python3",
           "args": [
             "-m", "discord_mcp",
-            "--token", ""YOUR_TOKEN_HERE"",
+            "--token", "YOUR_TOKEN_HERE",
             "--server-id", "1395578178973597799"
           ],
           "env": {

@@ -10,10 +10,10 @@
     "status": "created_successfully"
   },
   "claude-isolated-discord": {
-    "container_id": "311a81477cb2bd62d3b02c10a73af317a082f45dba30ef579a09dba47c7c2fd6",
+    "container_id": "a43e31bc6d12a570c610c82fea710ea2a5df4f68d09ed42ee1e95e13a9f71528",
     "container_name": "claude-isolated-discord",
     "image": "superagent/official-claude-code:latest",
-    "created_at": "2025-07-25T01:11:20Z",
+    "created_at": "2025-07-25T01:43:41Z",
     "discord_token_env": "DISCORD_TOKEN_CLAUDE",
     "authentication": "api_key",
     "workspace": "/Users/greg/claude_workspaces/claude-isolated-discord",
