@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "container-manager": {
+      "command": "python",
+      "args": ["-m", "mcp_servers.container_server"],
+      "env": {
+        "PYTHONPATH": "${PYTHONPATH}:."
+      }
+    }
+  }
+}

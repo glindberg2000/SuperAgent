@@ -449,10 +449,90 @@ COMMAND PATTERNS:
         # Don't respond to other messages - require explicit mention
         return False, "no_mention"
     
-    async def _generate_response(self, message_data: Dict[str, Any], context_messages: List[Dict]) -> str:
+    async def _generate_response(self, message_data: Dict[str, Any], context_messages: List[Dict], session: ClientSession = None) -> str:
         """Generate AI response using OpenAI with structured outputs"""
         try:
             content = message_data.get('content', '').lower()
+            
+            # Container management commands
+            if ('list' in content or 'show' in content) and 'container' in content:
+                return await self.execute_command("list_containers", session=session, include_stopped='all' in content)
+            
+            elif any(cmd in content for cmd in ['launch', 'start', 'run']) and 'container' in content:
+                # First get available containers to see what can be launched
+                if session:
+                    result = await session.call_tool("list_containers", {"include_stopped": True})
+                    if result and result.content:
+                        data = json.loads(result.content[0].text)
+                        if data['success'] and data['containers']:
+                            # Find which container the user is referring to
+                            container_name = None
+                            for container in data['containers']:
+                                if container['name'].lower() in content:
+                                    container_name = container['name']
+                                    break
+                            
+                            if container_name:
+                                return await self.execute_command("launch_container", session=session, container_name=container_name)
+                            else:
+                                # List available containers they can launch
+                                available = [c['name'] for c in data['containers']]
+                                return f"Please specify which container to launch. Available: {', '.join(available)}"
+                
+                return "Unable to retrieve container list. Please try again."
+            
+            elif any(cmd in content for cmd in ['stop', 'shutdown', 'kill']) and 'container' in content:
+                # Get running containers
+                if session:
+                    result = await session.call_tool("list_containers", {"include_stopped": False})
+                    if result and result.content:
+                        data = json.loads(result.content[0].text)
+                        if data['success'] and data['containers']:
+                            # Find which container to stop
+                            container_name = None
+                            for container in data['containers']:
+                                if container['name'].lower() in content:
+                                    container_name = container['name']
+                                    break
+                            
+                            if container_name:
+                                remove = 'remove' in content or 'delete' in content
+                                return await self.execute_command("shutdown_container", session=session, container_name=container_name, remove=remove)
+                            else:
+                                # List running containers
+                                running = [c['name'] for c in data['containers'] if c['status'] == 'running']
+                                if running:
+                                    return f"Please specify which container to stop. Running: {', '.join(running)}"
+                                else:
+                                    return "No containers are currently running."
+                
+                return "Unable to retrieve container list. Please try again."
+            
+            elif 'test' in content and 'container' in content:
+                # Get all containers for testing
+                if session:
+                    result = await session.call_tool("list_containers", {"include_stopped": False})
+                    if result and result.content:
+                        data = json.loads(result.content[0].text)
+                        if data['success'] and data['containers']:
+                            # Find which container to test
+                            container_name = None
+                            for container in data['containers']:
+                                if container['name'].lower() in content:
+                                    container_name = container['name']
+                                    break
+                            
+                            if container_name:
+                                return await self.execute_command("test_container", session=session, container_name=container_name)
+                            else:
+                                # List testable containers
+                                testable = [c['name'] for c in data['containers'] if c['status'] == 'running']
+                                if testable:
+                                    return f"Please specify which container to test. Running: {', '.join(testable)}"
+                                else:
+                                    return "No containers are currently running to test."
+                
+                return "Unable to retrieve container list. Please try again."
             
             # Get available agent types dynamically
             available_agents = self._get_available_agent_types()
@@ -825,8 +905,8 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
                 limit=self.config['max_context_messages']
             )
             
-            # Generate AI response
-            response_content = await self._generate_response(message_data, context_messages)
+            # Generate AI response (pass session for MCP commands)
+            response_content = await self._generate_response(message_data, context_messages, session)
             
             # Send response via MCP
             result = await session.call_tool("send_message", {
@@ -1237,10 +1317,75 @@ Respond with ONLY your final Discord message. No thinking or analysis. Be helpfu
             self.logger.error(f"Failed to list agents: {e}")
             return {"success": False, "error": str(e)}
     
-    async def execute_command(self, command_type: str, **kwargs) -> str:
+    async def execute_command(self, command_type: str, session: ClientSession = None, **kwargs) -> str:
         """Execute DevOps commands and return formatted response"""
         try:
-            if command_type == "deploy":
+            # Container management commands (require MCP session)
+            if command_type == "list_containers":
+                if not session:
+                    return "❌ MCP session required for container commands"
+                result = await session.call_tool("list_containers", {"include_stopped": kwargs.get('include_stopped', False)})
+                if result and result.content:
+                    data = json.loads(result.content[0].text)
+                    if data['success']:
+                        containers = data['containers']
+                        if not containers:
+                            return "📦 No containers found"
+                        container_list = []
+                        for c in containers:
+                            status_emoji = "🟢" if c['status'] == 'running' else "🔴"
+                            container_list.append(f"{status_emoji} **{c['name']}** - Bot: {c['bot_identity']} - Token: {c['discord_token_env']}")
+                        return f"📦 **Containers ({len(containers)}):**\n" + "\n".join(container_list)
+                    else:
+                        return f"❌ Failed to list containers: {data['error']}"
+                        
+            elif command_type == "launch_container":
+                if not session:
+                    return "❌ MCP session required for container commands"
+                result = await session.call_tool("launch_container", {
+                    "container_name": kwargs.get('container_name'),
+                    "preserve_auth": kwargs.get('preserve_auth', True)
+                })
+                if result and result.content:
+                    data = json.loads(result.content[0].text)
+                    if data['success']:
+                        return f"✅ {data['message']}"
+                    else:
+                        return f"❌ Failed to launch container: {data['error']}"
+                        
+            elif command_type == "shutdown_container":
+                if not session:
+                    return "❌ MCP session required for container commands"
+                result = await session.call_tool("shutdown_container", {
+                    "container_name": kwargs.get('container_name'),
+                    "remove": kwargs.get('remove', False)
+                })
+                if result and result.content:
+                    data = json.loads(result.content[0].text)
+                    if data['success']:
+                        return f"🛑 {data['message']}"
+                    else:
+                        return f"❌ Failed to shutdown container: {data['error']}"
+                        
+            elif command_type == "test_container":
+                if not session:
+                    return "❌ MCP session required for container commands"
+                result = await session.call_tool("test_container", {
+                    "container_name": kwargs.get('container_name')
+                })
+                if result and result.content:
+                    data = json.loads(result.content[0].text)
+                    if data['success']:
+                        tests = data['tests']
+                        test_results = []
+                        for test, passed in tests.items():
+                            emoji = "✅" if passed else "❌"
+                            test_results.append(f"{emoji} {test}")
+                        return f"🧪 **Container Test Results:**\n" + "\n".join(test_results)
+                    else:
+                        return f"❌ Failed to test container: {data['error']}"
+                        
+            elif command_type == "deploy":
                 result = await self.deploy_agent(kwargs.get('agent_type'), kwargs.get('team'), kwargs.get('name'))
                 if result['success']:
                     return f"✅ Successfully deployed {kwargs.get('agent_type')} agent: {result['name']}"

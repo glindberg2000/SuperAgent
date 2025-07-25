@@ -6,8 +6,9 @@ This document maintains the official mapping between Discord bot identities, the
 
 | Bot Name | Discord App Name | Token Env Var | Purpose | Container/Agent |
 |----------|------------------|---------------|---------|----------------|
-| `CryptoTax_CoderDev1` | CryptoTax CoderDev1 | `DISCORD_TOKEN_CODERDEV1` | Claude Code fullstack development | `claude-fullstackdev-persistent` |
-| `SuperAgent_DevOps` | SuperAgent DevOps | `DISCORD_TOKEN_DEVOPS` | DevOps and container management | `claude-isolated-discord` |
+| `CryptoTax_CoderDev1` | CryptoTax CoderDev1 | `DISCORD_TOKEN_CODERDEV1` | Claude Code development container 1 | `claude-isolated-discord` |
+| `CryptoTax_CoderDev2` | CryptoTax CoderDev2 | `DISCORD_TOKEN_CODERDEV2` | Claude Code development container 2 | `claude-fullstackdev-persistent` |
+| `SuperAgent_DevOps` | SuperAgent DevOps | `DISCORD_TOKEN_DEVOPS` | Orchestration agent launcher | `multi_agent_launcher.py` |
 | `SuperAgent_Grok4` | SuperAgent Grok4 | `DISCORD_TOKEN_GROK4` | Research and analysis with live search | `enhanced_discord_agent.py` |
 | `SuperAgent_Gemini` | SuperAgent Gemini | `DISCORD_TOKEN_GEMINI` | Creative tasks and multimodal analysis | `enhanced_discord_agent.py` |
 
