@@ -213,18 +213,13 @@ class ContainerServer:
             except docker.errors.NotFound:
                 pass
                 
-            # For new containers, use the startup script
-            # This ensures proper configuration and auth preservation
-            script_path = Path(__file__).parent.parent / "start_claude_container.sh"
-            if script_path.exists():
-                import subprocess
-                result = subprocess.run([str(script_path), container_name], capture_output=True, text=True)
-                if result.returncode == 0:
-                    return {"success": True, "message": f"Created container {container_name}"}
-                else:
-                    return {"success": False, "error": result.stderr}
-            else:
-                return {"success": False, "error": "Container startup script not found"}
+            # For new containers, return guidance
+            # The actual container creation should be done through the proper Python launcher
+            return {
+                "success": False, 
+                "error": f"Container {container_name} not found. Please create it first using the container launcher.",
+                "available_containers": self._get_available_containers()
+            }
                 
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -304,6 +299,16 @@ class ContainerServer:
             
         except Exception as e:
             return {"success": False, "error": str(e)}
+            
+    def _get_available_containers(self):
+        """Get list of available container configurations"""
+        try:
+            config_path = Path(__file__).parent.parent / "claude_container_config.json"
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            return list(config.get("containers", {}).keys())
+        except:
+            return ["claude-isolated-discord", "claude-fullstackdev-persistent"]
             
     async def run(self):
         """Run the MCP server"""
