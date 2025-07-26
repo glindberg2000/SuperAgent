@@ -9,7 +9,11 @@ import os
 import sys
 import argparse
 from dotenv import load_dotenv
-from enhanced_discord_agent import EnhancedDiscordAgent, AgentConfig
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from agents.enhanced_discord_agent import EnhancedDiscordAgent, AgentConfig
 from memory_client import MemoryClient
 
 # Load environment variables
@@ -17,50 +21,55 @@ load_dotenv()
 
 def create_agent_config(agent_type: str) -> AgentConfig:
     """Create agent configuration based on type"""
-    
+
     # Token mapping for different agent types (standardized naming)
     token_map = {
         "grok4_agent": "DISCORD_TOKEN_GROK4",
-        "claude_agent": "DISCORD_TOKEN_CLAUDE", 
+        "claude_agent": "DISCORD_TOKEN_CLAUDE",
         "gemini_agent": "DISCORD_TOKEN_GEMINI",
-        "o3_agent": "DISCORD_TOKEN_OPENAI"
+        "o3_agent": "DISCORD_TOKEN_OPENAI",
+        "devops_agent": "DISCORD_TOKEN_DEVOPS"
     }
-    
+
     # API key mapping (standardized naming)
     api_key_map = {
         "grok4_agent": "XAI_API_KEY",
         "claude_agent": "ANTHROPIC_API_KEY",
-        "gemini_agent": "GEMINI_API_KEY", 
-        "o3_agent": "OPENAI_API_KEY"
+        "gemini_agent": "GEMINI_API_KEY",
+        "o3_agent": "OPENAI_API_KEY",
+        "devops_agent": "OPENAI_API_KEY"
     }
-    
+
     # LLM type mapping
     llm_map = {
         "grok4_agent": "grok4",
         "claude_agent": "claude",
         "gemini_agent": "gemini",
-        "o3_agent": "openai"
+        "o3_agent": "openai",
+        "devops_agent": "openai"
     }
-    
+
     # Agent name mapping
     name_map = {
         "grok4_agent": "Grok4Agent",
-        "claude_agent": "ClaudeAgent", 
+        "claude_agent": "ClaudeAgent",
         "gemini_agent": "GeminiAgent",
-        "o3_agent": "O3Agent"
+        "o3_agent": "O3Agent",
+        "devops_agent": "DevOpsAgent"
     }
-    
+
     # Personality mapping
     personality_map = {
         "grok4_agent": "Expert AI researcher and analyst with live web search capabilities",
         "claude_agent": "Thoughtful reasoning specialist and code analysis expert",
         "gemini_agent": "Creative collaborator and multimodal specialist",
-        "o3_agent": "Logical reasoning specialist and mathematical analyst"
+        "o3_agent": "Logical reasoning specialist and mathematical analyst",
+        "devops_agent": "DevOps AI assistant with real MCP tools for managing agents and infrastructure"
     }
-    
+
     if agent_type not in token_map:
         raise ValueError(f"Unknown agent type: {agent_type}")
-    
+
     return AgentConfig(
         name=name_map[agent_type],
         bot_token=os.getenv(token_map[agent_type], ""),
@@ -96,7 +105,7 @@ async def main():
     parser = argparse.ArgumentParser(description='Single Agent Launcher with PostgreSQL')
     parser.add_argument(
         'agent_type',
-        choices=['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent'],
+        choices=['grok4_agent', 'claude_agent', 'gemini_agent', 'o3_agent', 'devops_agent'],
         help='Type of agent to launch'
     )
     parser.add_argument(
@@ -104,38 +113,53 @@ async def main():
         action='store_true',
         help='Test PostgreSQL connection before launching'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Test PostgreSQL if requested
     if args.test_postgres:
         if not await test_postgres_connection():
             print("Fix PostgreSQL connection before launching agent")
             sys.exit(1)
-    
+
     # Create agent configuration
     try:
         config = create_agent_config(args.agent_type)
     except ValueError as e:
         print(f"❌ Configuration error: {e}")
         sys.exit(1)
-    
+
     # Validate required environment variables
     if not config.bot_token:
         print(f"❌ Missing Discord token for {args.agent_type}")
         sys.exit(1)
-        
+
     if not config.api_key:
         print(f"❌ Missing API key for {args.agent_type}")
         sys.exit(1)
-    
+
     print(f"🚀 Starting {config.name} with PostgreSQL backend...")
     print(f"   LLM Type: {config.llm_type}")
     print(f"   Discord Token: {config.bot_token[:20]}...")
     print(f"   PostgreSQL: {os.getenv('POSTGRES_URL', 'postgresql://superagent:superagent@localhost:5433/superagent')}")
-    
+
     # Create and run agent
-    agent = EnhancedDiscordAgent(config)
+    if args.agent_type == 'devops_agent':
+        # Import and use the specialized MCP DevOps agent
+        from agents.devops.conversational_devops_ai import RealMCPDevOpsAgent
+        agent = RealMCPDevOpsAgent(config)
+
+        # Initialize MCP tools
+        print("🔄 Initializing MCP tools...")
+        success = await agent.initialize_mcp_tools()
+        if not success:
+            print("❌ Failed to initialize MCP tools - check that MCP servers are available")
+            sys.exit(1)
+        print("✅ MCP tools initialized successfully")
+    else:
+        # Use standard enhanced Discord agent
+        agent = EnhancedDiscordAgent(config)
+
     await agent.run()
 
 if __name__ == "__main__":
