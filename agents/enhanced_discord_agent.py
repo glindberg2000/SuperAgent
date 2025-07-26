@@ -17,7 +17,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 import re
 from dotenv import load_dotenv
-from llm_providers import create_llm_provider, LLMProvider
+from agents.llm_providers import create_llm_provider, LLMProvider
 from memory_client import MemoryClient
 
 # Load environment variables
