@@ -1,0 +1,126 @@
+{
+  "test_run": {
+    "timestamp": "2025-07-25T19:32:24.990865",
+    "test_suite_version": "1.0.0",
+    "python_version": "3.13.2"
+  },
+  "servers": {
+    "chatbot_server": {
+      "name": "Chatbot Management Server",
+      "script": "mcp_servers/chatbot_server.py",
+      "connection": true,
+      "tools": {
+        "list_chatbots": {
+          "tested": true,
+          "success": true,
+          "response_size": 1519
+        },
+        "launch_chatbot": {
+          "tested": true,
+          "success": true,
+          "response_size": 161
+        },
+        "get_chatbot_status": {
+          "tested": true,
+          "success": true,
+          "response_size": 743
+        },
+        "get_chatbot_logs": {
+          "tested": true,
+          "success": true,
+          "response_size": 470
+        },
+        "stop_chatbot": {
+          "tested": true,
+          "success": true,
+          "response_size": 65
+        },
+        "restart_chatbot": {
+          "tested": true,
+          "success": true,
+          "response_size": 360
+        }
+      },
+      "test_results": {},
+      "errors": []
+    },
+    "team_server": {
+      "name": "Team Management Server",
+      "script": "mcp_servers/team_server.py",
+      "connection": true,
+      "tools": {
+        "list_teams": {
+          "tested": true,
+          "success": true,
+          "response_size": 1911
+        },
+        "create_team": {
+          "tested": true,
+          "success": true,
+          "response_size": 423
+        },
+        "add_team_member": {
+          "tested": true,
+          "success": true,
+          "response_size": 187
+        },
+        "get_team_status": {
+          "tested": true,
+          "success": false,
+          "response_size": 114
+        },
+        "remove_team_member": {
+          "tested": true,
+          "success": true,
+          "response_size": 214
+        },
+        "start_team": {
+          "tested": true,
+          "success": false,
+          "response_size": 114
+        },
+        "stop_team": {
+          "tested": true,
+          "success": false,
+          "response_size": 114
+        },
+        "restart_team": {
+          "tested": true,
+          "success": false,
+          "response_size": 295
+        },
+        "get_team_logs": {
+          "tested": true,
+          "success": false,
+          "response_size": 114
+        },
+        "delete_team": {
+          "tested": true,
+          "success": true,
+          "response_size": 249
+        }
+      },
+      "test_results": {},
+      "errors": []
+    },
+    "container_server": {
+      "name": "Container Management Server",
+      "script": "mcp_servers/container_server.py",
+      "connection": true,
+      "tools": {
+        "list_containers": {
+          "tested": true,
+          "success": true,
+          "response_size": 363
+        },
+        "get_container_config": {
+          "tested": true,
+          "success": true,
+          "response_size": 875
+        }
+      },
+      "test_results": {},
+      "errors": []
+    }
+  }
+}
