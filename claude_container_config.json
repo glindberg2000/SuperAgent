@@ -3,7 +3,7 @@
     "claude-isolated-discord": {
       "name": "claude-isolated-discord",
       "image": "superagent/official-claude-code:latest",
-      "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+      "discord_token_env": "DISCORD_TOKEN_CODERDEV1",
       "workspace_type": "isolated",
       "workspace_path": "~/claude_workspaces/claude-isolated-discord",
       "agent_personality": "Claude Code container with isolated workspace. I am a separate bot from the SuperAgent system, operating independently for Discord-managed tasks.",
@@ -22,7 +22,7 @@
     "claude-fullstackdev-persistent": {
       "name": "claude-fullstackdev-persistent",
       "image": "superagent/official-claude-code:latest",
-      "discord_token_env": "DISCORD_TOKEN_CLAUDE",
+      "discord_token_env": "DISCORD_TOKEN_CODERDEV2",
       "workspace_type": "shared",
       "workspace_path": "/Users/greg/repos/SuperAgent",
       "agent_personality": "Full-stack developer specializing in Python, Docker, system architecture, and SuperAgent development. Expert in containerization and multi-agent systems.",
@@ -46,9 +46,9 @@
     "checkin_interval": 7200
   },
   "required_env_vars": [
-    "DISCORD_TOKEN_CLAUDE",
-    "DEFAULT_SERVER_ID",
-    "ANTHROPIC_API_KEY"
+    "DISCORD_TOKEN_CODERDEV1",
+    "DISCORD_TOKEN_DEVOPS", 
+    "DEFAULT_SERVER_ID"
   ],
   "mcp_config_template": {
     "mcpServers": {

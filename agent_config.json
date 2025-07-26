@@ -13,7 +13,7 @@
       "system_prompt_additions": "You excel at research, analysis, and providing detailed explanations."
     },
     "claude_agent": {
-      "name": "ClaudeAgent", 
+      "name": "ClaudeAgent",
       "llm_type": "claude",
       "max_context_messages": 20,
       "max_turns_per_thread": 25,
@@ -26,7 +26,7 @@
     },
     "gemini_agent": {
       "name": "GeminiAgent",
-      "llm_type": "gemini", 
+      "llm_type": "gemini",
       "max_context_messages": 18,
       "max_turns_per_thread": 20,
       "response_delay": 1.0,
@@ -54,16 +54,22 @@
     "research_team": {
       "name": "Research Team",
       "description": "AI research and analysis specialists",
-      "agents": ["grok4_agent", "claude_agent"],
+      "agents": [
+        "grok4_agent",
+        "claude_agent"
+      ],
       "default_server_id": "1395578178973597799",
       "gm_channel": "1395578179531309089",
       "auto_deploy": true,
       "coordination_mode": "sequential"
     },
     "creative_team": {
-      "name": "Creative Team", 
+      "name": "Creative Team",
       "description": "Creative and collaborative specialists",
-      "agents": ["gemini_agent", "o3_agent"],
+      "agents": [
+        "gemini_agent",
+        "o3_agent"
+      ],
       "default_server_id": "1395578178973597799",
       "gm_channel": "1395578179531309089",
       "auto_deploy": false,
@@ -72,8 +78,11 @@
     "dev_team": {
       "name": "Development Team",
       "description": "Code analysis and development specialists",
-      "agents": ["claude_agent", "o3_agent"],
-      "default_server_id": "1395578178973597799", 
+      "agents": [
+        "claude_agent",
+        "o3_agent"
+      ],
+      "default_server_id": "1395578178973597799",
       "gm_channel": "1395578179531309089",
       "auto_deploy": false,
       "coordination_mode": "collaborative"
